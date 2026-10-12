@@ -55,6 +55,8 @@ final class ShellModel {
   /** The window's safe area, without the toolbar's: controls laid out over the whole window,
    * such as the view pie, keep to it. */
   var safeAreaInsets = UIEdgeInsets.zero
+  /** The bottom of the top bar, in the window: controls along the top edge rest below it. */
+  var topBarBottom: CGFloat = 0
   /** The asset pane and timeline along the bottom: their height, which the controls resting on
    * the bottom edge rise above. */
   var bottomTray: CGFloat = 0

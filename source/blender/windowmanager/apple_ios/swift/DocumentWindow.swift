@@ -158,12 +158,132 @@ public final class DocumentController: UIHostingController<DocumentWindow> {
 
   override public func viewDidLayoutSubviews() {
     super.viewDidLayoutSubviews()
+    updateTopBarBottom()
     if !touchSettingsApplied, view.window != nil {
       /* The iPad's saved Pencil and touch choice; a phone has no Pencil, so its finger starts
        * with the tool. */
       touchSettingsApplied = true
       commands.setFingerUsesTool(UIDevice.current.userInterfaceIdiom == .phone || SwiftSettings.fingerUsesTool)
     }
+  }
+
+  /** SwiftUI places the top bar inside the window's safe area: find where it ends. */
+  private func updateTopBarBottom() {
+    var pending: [UIView] = [view]
+    var bottom: CGFloat = 0
+    while let current = pending.popLast() {
+      if let bar = current as? UINavigationBar {
+        if !bar.isHidden, bar.alpha > 0.01 { bottom = max(bottom, bar.convert(bar.bounds, to: view).maxY) }
+        continue
+      }
+      pending.append(contentsOf: current.subviews)
+    }
+    if model.topBarBottom != bottom { model.topBarBottom = bottom }
+  }
+
+  /* -------------------------------------------------------------------- */
+  /* The menu bar */
+
+  /** Projecting all of Blender's menus is costly and they change with the mode, rarely
+   * otherwise: ask again when the mode changes, and every few seconds for the rest. */
+  private func refreshMenuBar() {
+    if menuBarRequest != 0 {
+      guard let items = wm_apple_ios_menu_result(menuBarRequest) else { return }
+      menuBarRequest = 0
+      if !(items as NSArray).isEqual(to: menuBarItems as! [Any]) {
+        menuBarItems = items as NSArray
+        UIMenuSystem.main.setNeedsRebuild()
+      }
+    }
+    if menuBarMode == model.objectMode && Date().timeIntervalSince(menuBarTime) < 3 { return }
+    menuBarTime = Date()
+    menuBarMode = model.objectMode
+    menuBarRequest = wm_apple_ios_menu_bar_request()
+  }
+
+  override public func buildMenu(with builder: any UIMenuBuilder) {
+    super.buildMenu(with: builder)
+    wm_apple_ios_build_menu_bar(builder, menuBarItems as! [Any])
+  }
+
+  @objc public func newDocument(_ sender: Any?) {
+    wm_apple_ios_new_document(self)
+  }
+}
+
+/* Holding a finger on the viewport opens Blender's context menu there. */
+extension DocumentController: UIEditMenuInteractionDelegate, UIGestureRecognizerDelegate {
+  private func installContextMenu() {
+    let interaction = UIEditMenuInteraction(delegate: self)
+    metalView.addInteraction(interaction)
+    contextMenu = interaction
+    let press = UILongPressGestureRecognizer(target: self, action: #selector(contextMenuPress(_:)))
+    press.minimumPressDuration = 0.42
+    press.allowableMovement = 12
+    press.cancelsTouchesInView = true
+    press.allowedTouchTypes = [NSNumber(value: UITouch.TouchType.direct.rawValue)]
+    press.delegate = self
+    /* The phone holds a finger to use the tool. */
+    press.isEnabled = UIDevice.current.userInterfaceIdiom != .phone
+    metalView.addGestureRecognizer(press)
+    /* A mouse or trackpad's secondary click, as on the desktop. */
+    let click = UITapGestureRecognizer(target: self, action: #selector(contextMenuClick(_:)))
+    click.buttonMaskRequired = .secondary
+    click.allowedTouchTypes = [NSNumber(value: UITouch.TouchType.indirectPointer.rawValue)]
+    click.cancelsTouchesInView = false
+    click.delegate = self
+    metalView.addGestureRecognizer(click)
+  }
+
+  @objc private func contextMenuClick(_ click: UITapGestureRecognizer) {
+    /* Blender's own interface has its own context menus. */
+    guard click.state == .ended, !model.desktop else { return }
+    let configuration = UIEditMenuConfiguration(identifier: nil, sourcePoint: click.location(in: metalView))
+    contextMenu?.presentEditMenu(with: configuration)
+  }
+
+  @objc private func contextMenuPress(_ press: UILongPressGestureRecognizer) {
+    /* Blender's own interface has its own context menus. */
+    guard press.state == .began, !model.desktop else { return }
+    let configuration = UIEditMenuConfiguration(identifier: nil, sourcePoint: press.location(in: metalView))
+    contextMenu?.presentEditMenu(with: configuration)
+  }
+
+  public func gestureRecognizer(_ recognizer: UIGestureRecognizer, shouldReceive touch: UITouch) -> Bool {
+    /* Only a press or click that starts on the viewport itself, not on a control above it. */
+    (touch.type == .direct || touch.type == .indirectPointer) && touch.view === metalView
+  }
+
+  public func editMenuInteraction(_ interaction: UIEditMenuInteraction,
+                                  menuFor configuration: UIEditMenuConfiguration,
+                                  suggestedActions: [UIMenuElement]) -> UIMenu?
+  {
+    let menu = wm_apple_ios_context_menu()
+    return menu.children.isEmpty ? nil : menu
+  }
+
+  public func editMenuInteraction(_ interaction: UIEditMenuInteraction,
+                                  targetRectFor configuration: UIEditMenuConfiguration) -> CGRect
+  {
+    CGRect(origin: configuration.sourcePoint, size: CGSize(width: 1, height: 1))
+  }
+}
+
+/** \} */
+
+/* -------------------------------------------------------------------- */
+/** \name Viewport
+ * \{ */
+
+/** Holds GHOST's Metal view, sized to the window at the display's full resolution. */
+final class ViewportContainer: UIView {
+  let metalView: MTKView
+
+  init(metalView: MTKView) {
+    self.metalView = metalView
+    super.init(frame: .zero)
+    metalView.autoresizingMask = []
+    addSubview(metalView)
   }
 
   @available(*, unavailable)
