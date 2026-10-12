@@ -22,11 +22,6 @@
 
 #include "eevee_gbuffer_types.bsl.hh"
 
-/* NOTE: Only specialized for the gbuffer pass. */
-#ifndef GBUFFER_LAYER_MAX
-#  define GBUFFER_LAYER_MAX 3
-#endif
-
 namespace gbuffer::detail {
 
 /* -------------------------------------------------------------------- */
@@ -63,7 +58,10 @@ ClosureUndetermined unpack_closure(ClosurePacking cl_in)
     case GBUF_SUBSURFACE:
       gbuffer::Subsurface::unpack_additional(cl, cl_in.data1);
       break;
-    default:
+    case GBUF_DIFFUSE:
+    case GBUF_UNLIT:
+    case GBUF_TRANSLUCENT:
+    case GBUF_NONE:
       break;
   }
   return cl;

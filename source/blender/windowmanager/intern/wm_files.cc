@@ -74,6 +74,7 @@
 #include "BKE_appdir.hh"
 #include "BKE_autoexec.hh"
 #include "BKE_blender.hh"
+#include "BKE_blender_project.hh"
 #include "BKE_blender_version.h"
 #include "BKE_blendfile.hh"
 #include "BKE_callbacks.hh"
@@ -1155,6 +1156,34 @@ bool WM_file_read(bContext *C,
   BLI_assert(BKE_main_namemap_validate(*CTX_data_main(C)));
 
   return success;
+}
+
+bool WM_file_read_project(bContext *C, const char *filepath, ReportList *reports)
+{
+  const std::string project_root_path = BKE_is_path_inside_blender_project(filepath);
+
+  if (project_root_path.empty()) {
+    BKE_reportf(
+        reports, RPT_ERROR, "Could not find a project within the specified path: %s", filepath);
+    return false;
+  }
+
+  /* Initialize project before blend file, so it is taken into account. */
+  if (!BKE_blender_project_init_from_root_path(CTX_data_main(C), project_root_path)) {
+    BKE_reportf(
+        reports, RPT_ERROR, "Failed to load project from path: %s", project_root_path.c_str());
+    return false;
+  }
+
+  /* Read the startup file again with project configuration applied. */
+  wmHomeFileRead_Params read_homefile_params{};
+  read_homefile_params.use_data = true;
+  read_homefile_params.use_userdef = false;
+  read_homefile_params.use_factory_settings = G.factory_startup;
+  read_homefile_params.app_template_override = WM_init_state_app_template_get();
+  wm_homefile_read(C, &read_homefile_params, reports);
+
+  return true;
 }
 
 static struct {
@@ -4123,8 +4152,7 @@ static wmOperatorStatus wm_save_as_mainfile_exec(bContext *C, wmOperator *op)
     /* If saved file is the active one, there are technically no more compatibility issues, the
      * file on disk now matches the currently opened data version-wise. */
     bmain->has_forward_compatibility_issues = false;
-    bmain->colorspace.is_missing_opencolorio_config =
-        bmain->colorspace.is_failed_opencolorio_config;
+    IMB_colormanagement_file_save_post(bmain);
 
     /* If saved file is the active one, notify WM so that saved status and window title can be
      * updated. */

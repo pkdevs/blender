@@ -251,7 +251,7 @@ class PROJECT_PT_main_unset(Panel, CenterAlignMixIn):
             row = col.row()
             row.alignment = 'CENTER'
             row.operator("wm.save_as_mainfile", text="Save File...", icon='FILE_TICK')
-            row.operator("project.open_blend_in_project", icon='FILE_FOLDER')
+            row.operator("project.open", icon='FILE_FOLDER')
         else:
             row = col.row()
             row.alignment = 'CENTER'
@@ -273,8 +273,8 @@ class PROJECT_PT_main_unset(Panel, CenterAlignMixIn):
             col.separator()
             row = col.row()
             row.alignment = 'CENTER'
-            row.operator("project.new_project", text="New Project...", icon='ADD')
-            row.operator("project.open_blend_in_project", icon='FILE_FOLDER')
+            row.operator("project.new", text="New Project...", icon='ADD')
+            row.operator("project.open", icon='FILE_FOLDER')
 
 
 class PROJECT_UL_variables(bpy.types.UIList):
@@ -323,13 +323,14 @@ class PROJECT_PT_variables(Panel):
         col.operator("project.move_variable", text="", icon='TRIA_UP').direction = 'UP'
         col.operator("project.move_variable", text="", icon='TRIA_DOWN').direction = 'DOWN'
 
-        col = layout.column()
-        col.use_property_split = True
-        col.alignment = 'LEFT'
-        col.separator(factor=1)
-
         if project.active_variable_index >= 0 and project.active_variable_index < len(project.variables):
             var = project.variables[project.active_variable_index]
+
+            col = layout.column()
+            col.use_property_split = True
+            col.alignment = 'LEFT'
+            col.separator()
+
             col.prop(var, "type")
             if var.type == 'STRING':
                 col.prop(var, "subtype")

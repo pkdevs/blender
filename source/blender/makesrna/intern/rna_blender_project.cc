@@ -637,6 +637,9 @@ static bUserAssetLibrary *rna_BlenderProject_asset_library_new(const bContext *C
                                                                const char *directory,
                                                                const char *uuid_str)
 {
+  /* Keep this function in sync with the logic in project_asset_library_add in
+   * blender_project_config.cc. */
+
   bUserAssetLibrary *new_library;
   Main *bmain = CTX_data_main(C);
 
@@ -1015,7 +1018,7 @@ static void rna_def_blender_project(BlenderRNA *brna)
                              nullptr);
   RNA_def_property_ui_text(prop,
                            "Active Asset Library",
-                           "Index of the asset library being edited in the Project Setup UI");
+                           "Index of the asset library being edited in the Project Settings UI");
 }
 
 void RNA_def_blender_project(BlenderRNA *brna)
