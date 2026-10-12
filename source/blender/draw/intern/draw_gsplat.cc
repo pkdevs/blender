@@ -9,6 +9,7 @@
 #include "DNA_pointcloud_types.h"
 
 #include "GPU_batch.hh"
+#include "GPU_capabilities.hh"
 #include "GPU_material.hh"
 #include "GPU_shader.hh"
 #include "GPU_texture.hh"
@@ -44,6 +45,21 @@ void DRW_gsplat_module_free(GSplatModule *gsplat_module)
 
 namespace detail {
 
+/** Perform batched compute dispatches to stay below GPU_max_work_group_count.  */
+void batched_dispatch(const int invocs_count, PassSimple::Sub &pass)
+{
+  const int64_t max_invocs_per_dispatch = int64_t(GPU_max_work_group_count(0)) *
+                                          DRW_GSPLAT_GROUP_SIZE;
+  int invocs_start = 0;
+  while (invocs_start < invocs_count) {
+    int num_invocs = std::min(int64_t(invocs_count - invocs_start), max_invocs_per_dispatch);
+    pass.push_constant("invocs_start", invocs_start);
+    pass.push_constant("invocs_count", invocs_count);
+    pass.dispatch(divide_ceil_u(num_invocs, DRW_GSPLAT_GROUP_SIZE));
+    invocs_start += num_invocs;
+  }
+}
+
 template<typename PassT>
 void compute_pass_setup(PassT &ps, const ObjectRef &ob_ref, const ResourceHandleRange &res_handle)
 {
@@ -67,7 +83,7 @@ void compute_pass_setup(PassT &ps, const ObjectRef &ob_ref, const ResourceHandle
   sub_ps.push_constant("num_points", pointcloud.totpoint);
   sub_ps.push_constant("resource_id", resource_id);
 
-  sub_ps.dispatch(divide_ceil_u(pointcloud.totpoint, DRW_GSPLAT_GROUP_SIZE));
+  batched_dispatch(pointcloud.totpoint, sub_ps);
 }
 
 template<typename PassT>
