@@ -8,7 +8,7 @@
 
 #include "node_shader_util.hh"
 
-#include "BLI_noise.hh"
+#include "BLI_noise_varray.hh"
 
 #include "FN_multi_function.hh"
 

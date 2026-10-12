@@ -18,6 +18,7 @@
 #include "BLI_math_matrix_types.hh"
 #include "BLI_math_vector.hh"
 #include "BLI_noise.hh"
+#include "BLI_noise_varray.hh"
 #include "BLI_utildefines.hh"
 #include "BLI_virtual_array_exec.hh"
 
@@ -272,60 +273,6 @@ ATTR_ALWAYS_INLINE_EMIT float hash_float_to_float(float3 k)
 ATTR_ALWAYS_INLINE_EMIT float hash_float_to_float(float4 k)
 {
   return uint_to_float_01(hash_float(k));
-}
-
-void hash_float_to_float(const IndexMask &mask,
-                         const VArray<float3> &ks,
-                         MutableSpan<float> r_values)
-{
-  varray_exec::execute_1in_1out_uninitialized(
-      mask,
-      ks,
-      r_values,
-      [](const float3 &k) { return hash_float_to_float(k); },
-      varray_exec::exec_presets::MaterializeOptimize());
-}
-
-void hash_float2_to_float(const IndexMask &mask,
-                          const VArray<float3> &ks,
-                          MutableSpan<float> r_values)
-{
-  varray_exec::execute_1in_1out_uninitialized(
-      mask,
-      ks,
-      r_values,
-      [](const float3 &k) { return hash_float_to_float(float2(k.x, k.y)); },
-      varray_exec::exec_presets::MaterializeOptimize());
-}
-
-void hash_float_to_color(const IndexMask &mask,
-                         const VArray<float3> &ks,
-                         MutableSpan<ColorGeometry4f> r_values)
-{
-  varray_exec::execute_1in_1out_uninitialized(
-      mask,
-      ks,
-      r_values,
-      [](const float3 &k) {
-        const float3 c = hash_float_to_float3(k);
-        return ColorGeometry4f(c[0], c[1], c[2], 1.0f);
-      },
-      varray_exec::exec_presets::MaterializeOptimize());
-}
-
-void hash_float2_to_color(const IndexMask &mask,
-                          const VArray<float3> &ks,
-                          MutableSpan<ColorGeometry4f> r_values)
-{
-  varray_exec::execute_1in_1out_uninitialized(
-      mask,
-      ks,
-      r_values,
-      [](const float3 &k) {
-        const float3 c = hash_float_to_float3(float2(k.x, k.y));
-        return ColorGeometry4f(c[0], c[1], c[2], 1.0f);
-      },
-      varray_exec::exec_presets::MaterializeOptimize());
 }
 
 float2 hash_float_to_float2(float2 k)
@@ -2635,6 +2582,66 @@ void gabor(const float3 coordinates,
   if (r_intensity) {
     *r_intensity = math::length(phasor) / normalization_factor;
   }
+}
+
+/** \} */
+
+/* -------------------------------------------------------------------- */
+/** \name VArray wrappers for noise functions.
+ */
+
+void hash_float_to_float(const IndexMask &mask,
+                         const VArray<float3> &ks,
+                         MutableSpan<float> r_values)
+{
+  varray_exec::execute_1in_1out_uninitialized(
+      mask,
+      ks,
+      r_values,
+      [](const float3 &k) { return hash_float_to_float(k); },
+      varray_exec::exec_presets::MaterializeOptimize());
+}
+
+void hash_float2_to_float(const IndexMask &mask,
+                          const VArray<float3> &ks,
+                          MutableSpan<float> r_values)
+{
+  varray_exec::execute_1in_1out_uninitialized(
+      mask,
+      ks,
+      r_values,
+      [](const float3 &k) { return hash_float_to_float(float2(k.x, k.y)); },
+      varray_exec::exec_presets::MaterializeOptimize());
+}
+
+void hash_float_to_color(const IndexMask &mask,
+                         const VArray<float3> &ks,
+                         MutableSpan<ColorGeometry4f> r_values)
+{
+  varray_exec::execute_1in_1out_uninitialized(
+      mask,
+      ks,
+      r_values,
+      [](const float3 &k) {
+        const float3 c = hash_float_to_float3(k);
+        return ColorGeometry4f(c[0], c[1], c[2], 1.0f);
+      },
+      varray_exec::exec_presets::MaterializeOptimize());
+}
+
+void hash_float2_to_color(const IndexMask &mask,
+                          const VArray<float3> &ks,
+                          MutableSpan<ColorGeometry4f> r_values)
+{
+  varray_exec::execute_1in_1out_uninitialized(
+      mask,
+      ks,
+      r_values,
+      [](const float3 &k) {
+        const float3 c = hash_float_to_float3(float2(k.x, k.y));
+        return ColorGeometry4f(c[0], c[1], c[2], 1.0f);
+      },
+      varray_exec::exec_presets::MaterializeOptimize());
 }
 
 /** \} */

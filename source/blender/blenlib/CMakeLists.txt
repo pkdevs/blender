@@ -342,6 +342,7 @@ set(SRC
   BLI_mutex.hh
   BLI_noise.hh
   BLI_noise_c.hh
+  BLI_noise_varray.hh
   BLI_normalized_int_types.hh
   BLI_offset_indices.hh
   BLI_offset_span.hh
