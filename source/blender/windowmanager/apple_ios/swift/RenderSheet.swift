@@ -414,7 +414,6 @@ struct RenderGallery: View {
         LazyHStack(spacing: 0) {
           ForEach(pages, id: \.self) { id in
             pageView(id, active: id == (page ?? model.current(library)))
-              .padding(.horizontal, 20)
               .frame(width: geometry.size.width, height: geometry.size.height)
               .id(id)
           }
@@ -444,10 +443,10 @@ struct RenderGallery: View {
     }
   }
 
+  /** The render itself, filling the page, as a photo does in Photos. */
   @ViewBuilder
   private func pageView(_ id: String, active: Bool) -> some View {
     ZStack {
-      Color(uiColor: .secondarySystemGroupedBackground)
       if id == RenderModel.live {
         if let live = model.live {
           ZoomableImage(image: live)
@@ -465,7 +464,6 @@ struct RenderGallery: View {
         }
       }
     }
-    .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
   }
 }
 
