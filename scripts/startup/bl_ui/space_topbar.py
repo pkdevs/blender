@@ -345,9 +345,9 @@ class TOPBAR_MT_file_project(Menu):
     def draw(self, _context):
         layout = self.layout
 
-        layout.operator("project.new", text="New Project...", icon='ADD')
-        layout.operator("project.open", icon='FILE_FOLDER')
-        layout.operator("project.close")
+        layout.operator("project.new", text="New...", icon='ADD')
+        layout.operator("project.open", text="Open...", icon='FILE_FOLDER')
+        layout.operator("project.close", text="Close")
 
         layout.separator()
 
