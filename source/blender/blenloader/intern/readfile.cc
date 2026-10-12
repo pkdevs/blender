@@ -4859,7 +4859,8 @@ static Library *read_library_struct(FileData *fd, BHead *bheadlib)
     MEM_delete(id);
     fd->flags &= ~FD_FLAGS_FILE_OK;
     if (fd->bmain) {
-      blo_readfile_invalidate(fd, fd->bmain, "Corrupt .blend file, unexpected library block type");
+      blo_readfile_invalidate(
+          fd, fd->bmain, "Corrupt .blend file, unexpected non-library block type");
     }
     return nullptr;
   }

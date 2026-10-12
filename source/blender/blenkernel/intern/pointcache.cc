@@ -545,8 +545,7 @@ static void ptcache_particle_extra_read(void *psys_v, PTCacheMem *pm, float /*cf
         int springs_num = 0;
         for (uint i = 0; i < extra->totdata; i++) {
           const ParticleSpring &spring = psys->fluid_springs[i];
-          if (uint(spring.particle_index[0]) < totpart && uint(spring.particle_index[1]) < totpart)
-          {
+          if (spring.particle_index[0] < totpart && spring.particle_index[1] < totpart) {
             psys->fluid_springs[springs_num++] = spring;
           }
         }
