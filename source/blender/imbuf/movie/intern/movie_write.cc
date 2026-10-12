@@ -1030,12 +1030,11 @@ static AVStream *alloc_video_stream(MovieWriter *context,
                                     char *error,
                                     int error_maxncpy)
 {
-  const bool use_hw_encoding = true;  // XXX
-
   AVStream *st;
   const AVCodec *codec;
   AVDictionary *opts = nullptr;
   const RenderData *rd = &scene.r;
+  const bool use_hw_encoding = rd->ffcodecdata.encoder == FFM_ENCODER_HARDWARE;
 
   error[0] = '\0';
 
@@ -1388,6 +1387,7 @@ static AVStream *alloc_video_stream(MovieWriter *context,
     context->video_codec = nullptr;
     return nullptr;
   }
+  CLOG_INFO(&LOG, "ffmpeg: using video encoder %s", codec->name);
   av_dict_free(&opts);
 
   /* Allocate frame on the device when hardware encoding is used. */

@@ -6936,6 +6936,22 @@ static void rna_def_scene_ffmpeg_settings(BlenderRNA *brna)
       {0, nullptr, 0, nullptr, nullptr},
   };
 
+  static const EnumPropertyItem ffmpeg_encoder_items[] = {
+      {FFM_ENCODER_SOFTWARE,
+       "SOFTWARE",
+       0,
+       "Software",
+       "Encode video on the CPU. This is usually slowest, but can be better quality or smaller "
+       "file size."},
+      {FFM_ENCODER_HARDWARE,
+       "HARDWARE",
+       0,
+       "Hardware",
+       "Encode video using hardware acceleration when available. This is usually faster, but can "
+       "result in lower quality or larger file size."},
+      {0, nullptr, 0, nullptr, nullptr},
+  };
+
   static const EnumPropertyItem ffmpeg_prores_profiles_items[] = {
       {FFM_PRORES_PROFILE_422_PROXY, "422_PROXY", 0, "ProRes 422 Proxy", ""},
       {FFM_PRORES_PROFILE_422_LT, "422_LT", 0, "ProRes 422 LT", ""},
@@ -7105,6 +7121,14 @@ static void rna_def_scene_ffmpeg_settings(BlenderRNA *brna)
       "CRF",
       "A smaller Constant Rate Factor (CRF) results in better video quality but larger file size. "
       "The range of allowed CRF values is dependent on the codec.");
+  RNA_def_property_update(prop, NC_SCENE | ND_RENDER_OPTIONS, nullptr);
+
+  prop = RNA_def_property(srna, "encoder", PROP_ENUM, PROP_NONE);
+  RNA_def_property_enum_sdna(prop, nullptr, "encoder");
+  RNA_def_property_clear_flag(prop, PROP_ANIMATABLE);
+  RNA_def_property_enum_items(prop, ffmpeg_encoder_items);
+  RNA_def_property_enum_default(prop, FFM_ENCODER_SOFTWARE);
+  RNA_def_property_ui_text(prop, "Encoder", "Video encoding device");
   RNA_def_property_update(prop, NC_SCENE | ND_RENDER_OPTIONS, nullptr);
 
   prop = RNA_def_property(srna, "ffmpeg_preset", PROP_ENUM, PROP_NONE);
