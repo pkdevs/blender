@@ -730,22 +730,55 @@ struct EnumControl: View {
       }
     }
     else if compact {
-      /* A glass button showing the current choice's icon, with a single-selection menu. */
-      let icon = BlenderIcon.image(current?.string("icon"))
-      UIMenuButton(title: icon == nil ? current?.string("label") : nil, image: icon, style: .glassPopup,
-                   enabled: property.bool("editable"), accessibilityLabel: label, deferred: false) { uiMenu }
+      /* A glass button showing the current choice's icon, with the choices in a menu. */
+      Menu {
+        Picker(label, selection: chosen) { choices }
+          .pickerStyle(.inline)
+      } label: {
+        if let icon = BlenderIcon.image(current?.string("icon")) {
+          Image(uiImage: icon).resizable().scaledToFit().frame(width: 20, height: 20)
+        }
+        else {
+          Text(current?.string("label") ?? "—").font(.caption).lineLimit(1)
+        }
+      }
+      .frame(minWidth: 40, minHeight: 26)
+      .padding(.horizontal, 6)
+      .panelGlass(in: Capsule())
+      .disabled(!property.bool("editable"))
+      .accessibilityLabel(label)
     }
     else {
-      /* As a system button: the current choice in the tint, with a single-selection menu. */
+      /* The system's menu picker: the current choice in the tint, the choices in a menu. */
       FractionRow(fraction: 0.53) {
         Text(property.string("label") ?? "")
           .lineLimit(2)
           .frame(maxWidth: .infinity, alignment: .leading)
-        UIMenuButton(title: current?.string("label") ?? "—", image: nil, style: .system,
-                     enabled: property.bool("editable"), accessibilityLabel: label,
-                     menuTitle: label, deferred: false) { uiMenu }
+        Picker(label, selection: chosen) { choices }
+          .pickerStyle(.menu)
+          .labelsHidden()
+          .disabled(!property.bool("editable"))
+          .frame(maxWidth: .infinity, alignment: .trailing)
       }
       .frame(minHeight: 44)
+    }
+  }
+
+  /** The choice by its position, as Blender's values are of any type. */
+  private var chosen: Binding<Int> {
+    Binding(get: { options.firstIndex(where: isChecked) ?? -1 }, set: { index in
+      if options.indices.contains(index) { store.edit(property, value: options[index]["value"] ?? "") }
+    })
+  }
+
+  private var choices: some View {
+    ForEach(Array(options.enumerated()), id: \.offset) { index, option in
+      Label {
+        Text(option.string("label") ?? "")
+      } icon: {
+        if let image = BlenderIcon.image(option.string("icon")) { Image(uiImage: image) }
+      }
+      .tag(index)
     }
   }
 
@@ -761,16 +794,6 @@ struct EnumControl: View {
                             enabled: property.bool("editable"), accessibilityLabel: label) {
       store.edit(property, value: $0)
     }
-  }
-
-  private var uiMenu: UIMenu {
-    let actions = options.map { option in
-      UIAction(title: option.string("label") ?? "", image: BlenderIcon.image(option.string("icon")),
-               state: isChecked(option) ? .on : .off) { _ in
-        store.edit(property, value: option["value"] ?? "")
-      }
-    }
-    return UIMenu(title: label, options: .singleSelection, children: actions)
   }
 }
 

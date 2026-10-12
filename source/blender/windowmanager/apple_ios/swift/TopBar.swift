@@ -74,14 +74,12 @@ final class ShellCommands {
     }
     let viewport = UIDeferredMenuElement.uncached { [weak self] completion in
       let state = self?.model.viewport
-      let toggles = [("overlays", "Overlays", "circle.dashed.inset.filled"),
-                     ("xray", "X-Ray", "square.on.square.intersection.dashed"), ("gizmos", "Gizmos", "move.3d"),
-                     ("statistics", "Statistics", "chart.bar"), ("wireframe", "Wireframe", "cube")]
-        .map { name, title, symbol in
-          let toggle = UIAction(title: title, image: UIImage(systemName: symbol)) { _ in
-            Engine.setting("viewport_toggle", name)
+      let toggles = ViewportToggle.all
+        .map { item in
+          let toggle = UIAction(title: item.title, image: UIImage(systemName: item.symbol)) { _ in
+            Engine.setting("viewport_toggle", item.name)
           }
-          toggle.state = state?.bool(name) == true ? .on : .off
+          toggle.state = state?.bool(item.name) == true ? .on : .off
           toggle.attributes = state == nil ? .disabled : []
           return toggle
         }
@@ -293,6 +291,21 @@ private struct TransformSetting {
   }
 }
 
+/** Viewport options in the More menu, by Blender's name. */
+struct ViewportToggle {
+  let name: String
+  let title: String
+  let symbol: String
+
+  static let all = [
+    ViewportToggle(name: "overlays", title: "Overlays", symbol: "circle.dashed.inset.filled"),
+    ViewportToggle(name: "xray", title: "X-Ray", symbol: "square.on.square.intersection.dashed"),
+    ViewportToggle(name: "gizmos", title: "Gizmos", symbol: "move.3d"),
+    ViewportToggle(name: "statistics", title: "Statistics", symbol: "chart.bar"),
+    ViewportToggle(name: "wireframe", title: "Wireframe", symbol: "cube"),
+  ]
+}
+
 /** Blender's icon for an image, or the symbol, as a SwiftUI image. */
 private func iconImage(_ image: UIImage?) -> Image {
   image.map { Image(uiImage: $0) } ?? Image(systemName: "questionmark")
@@ -383,11 +396,32 @@ struct DocumentToolbar: ToolbarContent {
         .frame(width: 44, height: 44)
         .background(ShareSource(commands: commands))
         .accessibilityIdentifier("blender.share")
-      UIMenuButton(title: nil, image: UIImage(systemName: "ellipsis"), style: .plain,
-                   accessibilityLabel: "More", tint: .label, deferred: false) { commands.moreMenu() }
-        .frame(width: 44, height: 44)
+      Menu("More", systemImage: "ellipsis") { moreMenu }
         .accessibilityIdentifier("blender.actions")
     }
+  }
+
+  /** More: smaller things, with viewport options showing their current state. */
+  @ViewBuilder
+  private var moreMenu: some View {
+    Button("New…", systemImage: "doc.badge.plus") {
+      if let presenter = commands.presenter { wm_apple_ios_new_document(presenter) }
+    }
+    Section {
+      ForEach(ViewportToggle.all, id: \.name) { toggle in
+        Toggle(toggle.title, systemImage: toggle.symbol, isOn: Binding(
+          get: { model.viewport?.bool(toggle.name) == true },
+          set: { _ in Engine.setting("viewport_toggle", toggle.name) }))
+          .disabled(model.viewport == nil)
+      }
+    }
+    Section {
+      Button("Hide Interface", systemImage: "arrow.up.left.and.arrow.down.right") {
+        commands.setInterfaceHidden(true)
+      }
+      Button("Switch to Desktop Interface", systemImage: "macwindow") { Engine.setting("interface", "desktop") }
+    }
+    Button("Settings", systemImage: "gearshape") { commands.settings?.present() }
   }
 
   /* -------------------------------------------------------------------- */
