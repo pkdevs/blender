@@ -463,6 +463,8 @@ def read_project_toml_config(root_path, report=None):
         config_dict["schema_version"] = 1
 
     # Handle project config versioning.
+    # Need to check schema_version type because it can not be covered by schema
+    # validation, since by it has to be read before.
     if type(config_dict["schema_version"]) is not int:
         if report:
             report({'ERROR'}, rpt_("Invalid project configuration file: schema_version must be an integer"))
