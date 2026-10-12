@@ -226,17 +226,6 @@ struct LauncherScene: View {
   @objc public init(modelURL: URL) {
     state = LauncherSceneState(model: LauncherModel(url: modelURL))
     super.init(frame: .zero)
-    let host = UIHostingController(rootView: LauncherScene(state: state))
-    host.view.backgroundColor = .clear
-    host.view.translatesAutoresizingMaskIntoConstraints = false
-    addSubview(host.view)
-    NSLayoutConstraint.activate([
-      host.view.leadingAnchor.constraint(equalTo: leadingAnchor),
-      host.view.trailingAnchor.constraint(equalTo: trailingAnchor),
-      host.view.topAnchor.constraint(equalTo: topAnchor),
-      host.view.bottomAnchor.constraint(equalTo: bottomAnchor),
-    ])
-    self.host = host
     let pan = UIPanGestureRecognizer(target: self, action: #selector(pan(_:)))
     pan.delegate = self
     /* Fingers, and the pointer of a trackpad or mouse. */
@@ -257,6 +246,8 @@ struct LauncherScene: View {
     super.didMoveToWindow()
     NotificationCenter.default.removeObserver(self)
     guard window != nil else {
+      /* Opening a document takes the whole launcher out of its window. */
+      setShown(false)
       return
     }
     for name in [UIWindow.didBecomeVisibleNotification, UIWindow.didBecomeHiddenNotification] {
@@ -267,21 +258,35 @@ struct LauncherScene: View {
   }
 
   /**
-   * RealityKit draws and simulates every frame while its view is in a window. A document covers
-   * the launcher in a window above it, so take the model out of the window meanwhile. UIKit's own
-   * transparent windows, such as the one for menus and the keyboard, cover nothing.
+   * A document covers the launcher in a window above it. UIKit's own transparent windows, such as
+   * the one for menus and the keyboard, cover nothing.
    */
   @objc private func windowsChanged() {
-    guard let window, let host else {
+    guard let window else {
       return
     }
     let covered = window.windowScene?.windows.contains {
       $0 !== window && !$0.isHidden && $0.isOpaque && $0.windowLevel > window.windowLevel
     } ?? false
-    if covered, host.view.superview != nil {
+    setShown(!covered)
+  }
+
+  /**
+   * RealityKit draws and simulates every frame for as long as its view exists, even out of any
+   * window, which slows the document's viewport down. Keep the view only while it can be seen; the
+   * model's state outlives it, so it comes back as it was, without its entrance.
+   */
+  private func setShown(_ shown: Bool) {
+    if !shown, let host {
+      state.subscription?.cancel()
+      state.subscription = nil
       host.view.removeFromSuperview()
+      self.host = nil
     }
-    else if !covered, host.view.superview == nil {
+    else if shown, host == nil {
+      let host = UIHostingController(rootView: LauncherScene(state: state))
+      host.view.backgroundColor = .clear
+      host.view.translatesAutoresizingMaskIntoConstraints = false
       addSubview(host.view)
       NSLayoutConstraint.activate([
         host.view.leadingAnchor.constraint(equalTo: leadingAnchor),
@@ -289,6 +294,7 @@ struct LauncherScene: View {
         host.view.topAnchor.constraint(equalTo: topAnchor),
         host.view.bottomAnchor.constraint(equalTo: bottomAnchor),
       ])
+      self.host = host
     }
   }
 
