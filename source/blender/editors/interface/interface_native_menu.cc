@@ -12,6 +12,7 @@
 #include "RNA_enum_types.hh"
 #include "UI_interface_layout.hh"
 #include "WM_api.hh"
+#include "WM_native_interface.hh"
 #include "WM_types.hh"
 #include "interface_intern.hh"
 
@@ -32,6 +33,31 @@ std::string label(const Button &but)
 {
   return but.drawstr.substr(
       0, (but.flag & BUT_HAS_SEP_CHAR) ? but.drawstr.find(UI_SEP_CHAR) : std::string::npos);
+}
+
+/** The key that runs the button's operator, as the menu shows it, or null. Mouse buttons and
+ * keys the native interface keeps from the operator have none. */
+const wmKeyMapItem *shortcut(const bContext *C, const Button &but)
+{
+  if (!but.optype) {
+    return nullptr;
+  }
+  IDProperty *properties = but.opptr ? static_cast<IDProperty *>(but.opptr->data) : nullptr;
+  const wmKeyMapItem *kmi = WM_key_event_operator(C,
+                                                  but.optype->idname,
+                                                  but.opcontext,
+                                                  properties,
+                                                  EVT_TYPE_MASK_KEYBOARD,
+                                                  EVT_TYPE_MASK_KEYBOARD_MODIFIER,
+                                                  nullptr);
+  if (kmi == nullptr) {
+    return nullptr;
+  }
+  const wmNativeInterface *native = WM_native_interface();
+  if (native && native->keymap_item_hidden && native->keymap_item_hidden(kmi)) {
+    return nullptr;
+  }
+  return kmi;
 }
 
 /* Validate the whole route again at activation. Never keep RNA pointers, buttons, or
@@ -246,6 +272,17 @@ void project(bContext *C,
     }
     if (MenuType *child = button_menutype_get(&but)) {
       item->append_str("menu", child->idname);
+    }
+    const char *key_name = nullptr;
+    if (const wmKeyMapItem *kmi = shortcut(C, but);
+        kmi && RNA_enum_identifier(rna_enum_event_type_items, kmi->type, &key_name))
+    {
+      auto key = item->append_dict("key");
+      key->append_str("type", key_name);
+      key->append_int("shift", kmi->shift == KM_MOD_HELD);
+      key->append_int("ctrl", kmi->ctrl == KM_MOD_HELD);
+      key->append_int("alt", kmi->alt == KM_MOD_HELD);
+      key->append_int("oskey", kmi->oskey == KM_MOD_HELD);
     }
     auto route = item->append_dict("route");
     route->append_str("root", root);

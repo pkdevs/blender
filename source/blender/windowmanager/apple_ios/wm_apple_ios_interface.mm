@@ -177,6 +177,17 @@ NSArray *blenderIOSMenuResult(uint64_t identifier)
   return [items isKindOfClass:[NSArray class]] ? items : @[];
 }
 
+/* Menu items with shortcuts are key commands, which UIKit sends along the responder chain. The
+ * application ends every chain. */
+@implementation UIApplication (BlenderMenuCommand)
+- (void)blenderMenuCommand:(UIKeyCommand *)command
+{
+  if ([command.propertyList isKindOfClass:NSString.class]) {
+    WM_apple_ios_ui_menu_request([command.propertyList UTF8String], true);
+  }
+}
+@end
+
 UIMenu *blenderIOSNativeSubmenu(NSDictionary *item, NSString *identifier)
 {
   NSString *route = blenderIOSMenuRoute(item[@"route"]);
@@ -215,6 +226,93 @@ UIMenu *blenderIOSNativeSubmenu(NSDictionary *item, NSString *identifier)
                     identifier:identifier
                        options:0
                       children:@[ content ]];
+}
+
+/** A Blender key as a UIKit key command input, nil for keys UIKit can't name (numpad keys). */
+static NSString *blenderIOSKeyInput(NSString *type)
+{
+  if (type.length == 1) {
+    return type.lowercaseString;
+  }
+  static NSDictionary<NSString *, NSString *> *inputs = [@{
+    @"ZERO" : @"0",
+    @"ONE" : @"1",
+    @"TWO" : @"2",
+    @"THREE" : @"3",
+    @"FOUR" : @"4",
+    @"FIVE" : @"5",
+    @"SIX" : @"6",
+    @"SEVEN" : @"7",
+    @"EIGHT" : @"8",
+    @"NINE" : @"9",
+    @"ESC" : UIKeyInputEscape,
+    @"RET" : @"\r",
+    @"TAB" : @"\t",
+    @"SPACE" : @" ",
+    @"BACK_SPACE" : @"\b",
+    @"DEL" : UIKeyInputDelete,
+    @"HOME" : UIKeyInputHome,
+    @"END" : UIKeyInputEnd,
+    @"PAGE_UP" : UIKeyInputPageUp,
+    @"PAGE_DOWN" : UIKeyInputPageDown,
+    @"LEFT_ARROW" : UIKeyInputLeftArrow,
+    @"RIGHT_ARROW" : UIKeyInputRightArrow,
+    @"UP_ARROW" : UIKeyInputUpArrow,
+    @"DOWN_ARROW" : UIKeyInputDownArrow,
+    @"MINUS" : @"-",
+    @"EQUAL" : @"=",
+    @"PLUS" : @"+",
+    @"COMMA" : @",",
+    @"PERIOD" : @".",
+    @"SLASH" : @"/",
+    @"BACK_SLASH" : @"\\",
+    @"SEMI_COLON" : @";",
+    @"QUOTE" : @"'",
+    @"LEFT_BRACKET" : @"[",
+    @"RIGHT_BRACKET" : @"]",
+    @"ACCENT_GRAVE" : @"`",
+    @"F1" : UIKeyInputF1,
+    @"F2" : UIKeyInputF2,
+    @"F3" : UIKeyInputF3,
+    @"F4" : UIKeyInputF4,
+    @"F5" : UIKeyInputF5,
+    @"F6" : UIKeyInputF6,
+    @"F7" : UIKeyInputF7,
+    @"F8" : UIKeyInputF8,
+    @"F9" : UIKeyInputF9,
+    @"F10" : UIKeyInputF10,
+    @"F11" : UIKeyInputF11,
+    @"F12" : UIKeyInputF12,
+  } retain];
+  return inputs[type];
+}
+
+/**
+ * A menu item with its shortcut, shown the iPad's way in menus and while Command is held. The key
+ * itself goes to Blender's key-map, which also handles it in modal tools and other editors, see
+ * #GHOSTUIWindow.handleKeyboardEvent: the command only runs when chosen from the menu.
+ */
+static UIKeyCommand *blenderIOSMenuKeyCommand(NSDictionary *item, NSString *route, UIImage *icon)
+{
+  NSDictionary *key = item[@"key"];
+  if (![key isKindOfClass:NSDictionary.class] || ![key[@"type"] isKindOfClass:NSString.class]) {
+    return nil;
+  }
+  NSString *input = blenderIOSKeyInput(key[@"type"]);
+  if (!input) {
+    return nil;
+  }
+  UIKeyModifierFlags flags = 0;
+  flags |= [key[@"shift"] boolValue] ? UIKeyModifierShift : 0;
+  flags |= [key[@"ctrl"] boolValue] ? UIKeyModifierControl : 0;
+  flags |= [key[@"alt"] boolValue] ? UIKeyModifierAlternate : 0;
+  flags |= [key[@"oskey"] boolValue] ? UIKeyModifierCommand : 0;
+  return [UIKeyCommand commandWithTitle:item[@"title"]
+                                  image:icon
+                                 action:@selector(blenderMenuCommand:)
+                                  input:input
+                          modifierFlags:flags
+                           propertyList:route];
 }
 
 NSArray<UIMenuElement *> *blenderIOSNativeMenuElements(NSArray *items)
@@ -260,6 +358,12 @@ NSArray<UIMenuElement *> *blenderIOSNativeMenuElements(NSArray *items)
     }
     NSString *route = blenderIOSMenuRoute(item[@"route"]);
     UIImage *icon = blenderIOSMenuIcon(item);
+    if (UIKeyCommand *command = blenderIOSMenuKeyCommand(item, route, icon)) {
+      command.attributes = [item[@"disabled"] boolValue] ? UIMenuElementAttributesDisabled : 0;
+      command.state = [item[@"checked"] boolValue] ? UIMenuElementStateOn : UIMenuElementStateOff;
+      [children addObject:command];
+      continue;
+    }
     UIAction *action = [UIAction actionWithTitle:item[@"title"]
                                            image:icon
                                       identifier:nil
