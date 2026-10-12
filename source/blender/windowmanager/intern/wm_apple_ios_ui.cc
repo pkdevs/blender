@@ -814,6 +814,20 @@ void ios_rna_undo_push(bContext *C, PropertyRNA *prop)
   }
 }
 
+/** The active tool, with the area's tool synced to the mode first: the snapshot is read right
+ * after operators, which can change the mode (as adding an object from Sculpt Mode does), before
+ * Blender's own update syncs it. */
+static bToolRef *ios_active_tool(bContext *C)
+{
+  if (ScrArea *area = CTX_wm_area(C)) {
+    if (WorkSpace *workspace = CTX_wm_workspace(C)) {
+      WM_toolsystem_refresh_screen_area(
+          workspace, CTX_data_scene(C), CTX_data_view_layer(C), area);
+    }
+  }
+  return WM_toolsystem_ref_from_context(C);
+}
+
 void ios_setting_execute(bContext *C, const IOSSettingCommand &command)
 {
   bool preview = false;
@@ -920,7 +934,7 @@ void ios_setting_execute(bContext *C, const IOSSettingCommand &command)
   }
   if (command.setting == "native_action") {
     /* The button may predate a context change; `run` checks the action still applies. */
-    const bToolRef *tool = WM_toolsystem_ref_from_context(C);
+    const bToolRef *tool = ios_active_tool(C);
     const char *imports[] = {"bpy", "bl_ui", nullptr};
     const std::string expression = "bl_ui.native_actions.run(bpy.context, \"" +
                                    ios_json_escape(command.value) + "\", \"" +
@@ -1802,7 +1816,7 @@ std::string ios_toolbar_build_json_for_context(bContext *C)
   const std::string mesh_select_mode = mode == CTX_MODE_EDIT_MESH ?
                                            ios_mesh_select_mode_string(tool_settings) :
                                            "";
-  bToolRef *active_tool = has_view3d_context ? WM_toolsystem_ref_from_context(C) : nullptr;
+  bToolRef *active_tool = has_view3d_context ? ios_active_tool(C) : nullptr;
   const char *active_tool_id = active_tool ? active_tool->idname : "builtin.select_box";
   std::string tools_json = "[]";
   std::string panels_json = "null";
