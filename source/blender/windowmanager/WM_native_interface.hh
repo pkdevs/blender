@@ -108,6 +108,12 @@ struct wmNativeInterface {
   /** Gizmos show no tooltips, as nothing hovers long over them. */
   bool hide_gizmo_tooltips = false;
 
+  /**
+   * An operator starts from input: the interface may change its properties first, as the iPad's
+   * held + and - buttons make a selection add or subtract, or a brush stroke go either way.
+   */
+  void (*operator_input_adjust)(bContext *C, wmOperator *op) = nullptr;
+
   /** Ensure the platform's own items in the default key configuration. */
   void (*keyconfig_default_ensure)(wmKeyConfig *keyconf) = nullptr;
   /**

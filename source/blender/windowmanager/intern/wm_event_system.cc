@@ -1691,6 +1691,14 @@ static wmOperatorStatus wm_operator_invoke(bContext *C,
       WM_operator_last_properties_init(op);
     }
 
+    if (event != nullptr && !is_nested_call) {
+      if (const wmNativeInterface *native = WM_native_interface();
+          native && native->operator_input_adjust)
+      {
+        native->operator_input_adjust(C, op);
+      }
+    }
+
     if ((event == nullptr) || (event->type != MOUSEMOVE)) {
       CLOG_DEBUG(WM_LOG_EVENTS,
                  "Handle event %d win %p op %s",

@@ -48,6 +48,7 @@ extern "C" bool WM_apple_ios_ui_desktop_mode();
 extern "C" void WM_apple_ios_ui_pencil_hover_set(bool active, int x, int y);
 extern "C" void WM_apple_ios_ui_navigation_hover_set(bool active);
 extern "C" void WM_apple_ios_ui_view_roll_enqueue(float angle);
+void WM_apple_ios_ui_operator_input_adjust(bContext *C, wmOperator *op);
 
 namespace ui {
 void native_redo_operator_register(bContext *C, wmOperator *op);
@@ -218,6 +219,7 @@ wmNativeInterface native_interface_create()
   native.pointer_hovering = WM_apple_ios_pencil_hover_active;
   native.direct_gizmo_press = true;
   native.hide_gizmo_tooltips = true;
+  native.operator_input_adjust = WM_apple_ios_ui_operator_input_adjust;
   native.keyconfig_default_ensure = keyconfig_default_ensure;
   native.keymap_item_hidden = keymap_item_hidden;
   return native;

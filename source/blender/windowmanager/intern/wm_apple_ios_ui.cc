@@ -41,6 +41,7 @@
 #include "DEG_depsgraph.hh"
 
 #include "DNA_asset_types.h"
+#include "DNA_brush_types.h"
 #include "DNA_node_types.h"
 #include "DNA_object_types.h"
 #include "DNA_scene_types.h"
@@ -2230,6 +2231,90 @@ extern "C" void WM_apple_ios_ui_brush_activate(const char *brush_id)
 
   ios_ui_messages.push(IOSBrushCommand{brush_id});
 }
+
+/* -------------------------------------------------------------------- */
+/** \name Held + and -
+ *
+ * The buttons beside the toolbar, held or locked while selecting or painting, as Shift and Ctrl
+ * would be on a keyboard. Rather than modifier keys, which each editor's key map reads its own
+ * way, they set what the operator a tap or drag starts does: add to or subtract from the
+ * selection, for taps as well as box, lasso and circle selection, or stroke a brush either way.
+ * \{ */
+
+enum class IOSSelectIntent { None = 0, Add = 1, Subtract = 2 };
+
+static std::atomic<int> ios_select_intent = int(IOSSelectIntent::None);
+
+/** \a intent is an #IOSSelectIntent. Called from the main thread. */
+extern "C" void WM_apple_ios_ui_select_intent_set(int intent)
+{
+  ios_select_intent = intent;
+}
+
+static bool operator_enum_has(bContext *C, PointerRNA *ptr, PropertyRNA *prop, const char *id)
+{
+  int value;
+  return RNA_property_enum_value(C, ptr, prop, id, &value);
+}
+
+static void operator_bool_set(PointerRNA *ptr, const char *name, const bool value)
+{
+  if (PropertyRNA *prop = RNA_struct_find_property(ptr, name)) {
+    if (RNA_property_type(prop) == PROP_BOOLEAN) {
+      RNA_property_boolean_set(ptr, prop, value);
+    }
+  }
+}
+
+void WM_apple_ios_ui_operator_input_adjust(bContext *C, wmOperator *op)
+{
+  const IOSSelectIntent intent = IOSSelectIntent(ios_select_intent.load());
+  if (intent == IOSSelectIntent::None) {
+    return;
+  }
+  const bool add = intent == IOSSelectIntent::Add;
+  PointerRNA *ptr = op->ptr;
+
+  if (PropertyRNA *mode = RNA_struct_find_property(ptr, "mode");
+      mode && RNA_property_type(mode) == PROP_ENUM)
+  {
+    /* Box, lasso and circle selection, in every editor. */
+    int value;
+    if (operator_enum_has(C, ptr, mode, "ADD") &&
+        RNA_property_enum_value(C, ptr, mode, add ? "ADD" : "SUB", &value))
+    {
+      RNA_property_enum_set(ptr, mode, value);
+      return;
+    }
+    /* Brush strokes: + strokes the way the brush's direction says, as without a modifier key,
+     * and - the other way, as with Ctrl. Brushes set to their second direction (such as
+     * Subtract or Deflate) swap them, so + always adds, inflates or pinches. */
+    if (operator_enum_has(C, ptr, mode, "NORMAL") && operator_enum_has(C, ptr, mode, "INVERT")) {
+      Paint *paint = BKE_paint_get_active_from_context(C);
+      const Brush *brush = paint ? BKE_paint_brush(paint) : nullptr;
+      const bool second_direction = brush && (brush->flag & BRUSH_DIR_IN);
+      if (RNA_property_enum_value(
+              C, ptr, mode, add != second_direction ? "NORMAL" : "INVERT", &value))
+      {
+        RNA_property_enum_set(ptr, mode, value);
+      }
+      return;
+    }
+  }
+
+  /* Picking with a tap. */
+  const bool extends = RNA_struct_find_property(ptr, "extend") != nullptr;
+  const bool deselects = RNA_struct_find_property(ptr, "deselect") != nullptr;
+  if (!extends && !deselects) {
+    return;
+  }
+  operator_bool_set(ptr, "extend", add);
+  operator_bool_set(ptr, "deselect", !add);
+  operator_bool_set(ptr, "toggle", false);
+  operator_bool_set(ptr, "deselect_all", false);
+}
+
+/** \} */
 
 /**
  * Native asset pane drag: \a phase is a #IOSAssetDragPhase, \a x and \a y are GHOST client

@@ -108,6 +108,18 @@ class _template_widget:
             layout.prop(orient_slot, "type")
 
 
+def _draw_select_mode(context, layout, props):
+    # On the iPad the held + and - buttons beside the toolbar add to and subtract from any
+    # selection, taps included, in place of these, which only applied to dragging.
+    # Only that interface draws tool settings from the main region.
+    region = context.region
+    if region is not None and region.type == 'WINDOW':
+        return
+    row = layout.row()
+    row.use_property_split = False
+    row.prop(props, "mode", text="", expand=True, icon_only=True)
+
+
 class _defs_view3d_generic:
     @ToolDef.from_fn
     def cursor():
@@ -444,9 +456,7 @@ class _defs_view3d_select:
     def box():
         def draw_settings(_context, layout, tool):
             props = tool.operator_properties("view3d.select_box")
-            row = layout.row()
-            row.use_property_split = False
-            row.prop(props, "mode", text="", expand=True, icon_only=True)
+            _draw_select_mode(_context, layout, props)
         return dict(
             idname="builtin.select_box",
             label="Select Box",
@@ -460,9 +470,7 @@ class _defs_view3d_select:
     def lasso():
         def draw_settings(_context, layout, tool):
             props = tool.operator_properties("view3d.select_lasso")
-            row = layout.row()
-            row.use_property_split = False
-            row.prop(props, "mode", text="", expand=True, icon_only=True)
+            _draw_select_mode(_context, layout, props)
         return dict(
             idname="builtin.select_lasso",
             label="Select Lasso",
@@ -476,9 +484,7 @@ class _defs_view3d_select:
     def circle():
         def draw_settings(_context, layout, tool):
             props = tool.operator_properties("view3d.select_circle")
-            row = layout.row()
-            row.use_property_split = False
-            row.prop(props, "mode", text="", expand=True, icon_only=True)
+            _draw_select_mode(_context, layout, props)
             layout.prop(props, "radius")
 
         def draw_cursor(_context, tool, xy):
@@ -2593,9 +2599,7 @@ class _defs_image_mask_select:
     def box():
         def draw_settings(_context, layout, tool):
             props = tool.operator_properties("mask.select_box")
-            row = layout.row()
-            row.use_property_split = False
-            row.prop(props, "mode", text="", expand=True, icon_only=True)
+            _draw_select_mode(_context, layout, props)
 
         return dict(
             idname="builtin.select_box",
@@ -2610,9 +2614,7 @@ class _defs_image_mask_select:
     def lasso():
         def draw_settings(_context, layout, tool):
             props = tool.operator_properties("mask.select_lasso")
-            row = layout.row()
-            row.use_property_split = False
-            row.prop(props, "mode", text="", expand=True, icon_only=True)
+            _draw_select_mode(_context, layout, props)
 
         return dict(
             idname="builtin.select_lasso",
@@ -2627,9 +2629,7 @@ class _defs_image_mask_select:
     def circle():
         def draw_settings(_context, layout, tool):
             props = tool.operator_properties("mask.select_circle")
-            row = layout.row()
-            row.use_property_split = False
-            row.prop(props, "mode", text="", expand=True, icon_only=True)
+            _draw_select_mode(_context, layout, props)
             layout.prop(props, "radius")
 
         def draw_cursor(_context, tool, xy):
@@ -2751,9 +2751,7 @@ class _defs_image_uv_select:
     def box():
         def draw_settings(_context, layout, tool):
             props = tool.operator_properties("uv.select_box")
-            row = layout.row()
-            row.use_property_split = False
-            row.prop(props, "mode", text="", expand=True, icon_only=True)
+            _draw_select_mode(_context, layout, props)
         return dict(
             idname="builtin.select_box",
             label="Select Box",
@@ -2767,9 +2765,7 @@ class _defs_image_uv_select:
     def lasso():
         def draw_settings(_context, layout, tool):
             props = tool.operator_properties("uv.select_lasso")
-            row = layout.row()
-            row.use_property_split = False
-            row.prop(props, "mode", text="", expand=True, icon_only=True)
+            _draw_select_mode(_context, layout, props)
         return dict(
             idname="builtin.select_lasso",
             label="Select Lasso",
@@ -2783,9 +2779,7 @@ class _defs_image_uv_select:
     def circle():
         def draw_settings(_context, layout, tool):
             props = tool.operator_properties("uv.select_circle")
-            row = layout.row()
-            row.use_property_split = False
-            row.prop(props, "mode", text="", expand=True, icon_only=True)
+            _draw_select_mode(_context, layout, props)
             layout.prop(props, "radius")
 
         def draw_cursor(_context, tool, xy):
@@ -3076,9 +3070,7 @@ class _defs_node_select:
     def box():
         def draw_settings(_context, layout, tool):
             props = tool.operator_properties("node.select_box")
-            row = layout.row()
-            row.use_property_split = False
-            row.prop(props, "mode", text="", expand=True, icon_only=True)
+            _draw_select_mode(_context, layout, props)
         return dict(
             idname="builtin.select_box",
             label="Select Box",
@@ -3092,9 +3084,7 @@ class _defs_node_select:
     def lasso():
         def draw_settings(_context, layout, tool):
             props = tool.operator_properties("node.select_lasso")
-            row = layout.row()
-            row.use_property_split = False
-            row.prop(props, "mode", text="", expand=True, icon_only=True)
+            _draw_select_mode(_context, layout, props)
         return dict(
             idname="builtin.select_lasso",
             label="Select Lasso",
@@ -3108,9 +3098,7 @@ class _defs_node_select:
     def circle():
         def draw_settings(_context, layout, tool):
             props = tool.operator_properties("node.select_circle")
-            row = layout.row()
-            row.use_property_split = False
-            row.prop(props, "mode", text="", expand=True, icon_only=True)
+            _draw_select_mode(_context, layout, props)
             layout.prop(props, "radius")
 
         def draw_cursor(_context, tool, xy):
@@ -3290,9 +3278,7 @@ class _defs_sequencer_select:
     def box_timeline():
         def draw_settings(_context, layout, tool):
             props = tool.operator_properties("sequencer.select_box")
-            row = layout.row()
-            row.use_property_split = False
-            row.prop(props, "mode", text="", expand=True, icon_only=True)
+            _draw_select_mode(_context, layout, props)
         return dict(
             idname="builtin.select_box",
             label="Select Box",
@@ -3306,9 +3292,7 @@ class _defs_sequencer_select:
     def box_preview():
         def draw_settings(_context, layout, tool):
             props = tool.operator_properties("sequencer.select_box")
-            row = layout.row()
-            row.use_property_split = False
-            row.prop(props, "mode", text="", expand=True, icon_only=True)
+            _draw_select_mode(_context, layout, props)
         return dict(
             idname="builtin.select_box",
             label="Select Box",
@@ -3322,9 +3306,7 @@ class _defs_sequencer_select:
     def lasso_timeline():
         def draw_settings(_context, layout, tool):
             props = tool.operator_properties("sequencer.select_lasso")
-            row = layout.row()
-            row.use_property_split = False
-            row.prop(props, "mode", text="", expand=True, icon_only=True)
+            _draw_select_mode(_context, layout, props)
         return dict(
             idname="sequencer.select_lasso",
             label="Select Lasso",
@@ -3338,9 +3320,7 @@ class _defs_sequencer_select:
     def lasso_preview():
         def draw_settings(_context, layout, tool):
             props = tool.operator_properties("sequencer.select_lasso")
-            row = layout.row()
-            row.use_property_split = False
-            row.prop(props, "mode", text="", expand=True, icon_only=True)
+            _draw_select_mode(_context, layout, props)
         return dict(
             idname="sequencer.select_lasso",
             label="Select Lasso",
@@ -3354,9 +3334,7 @@ class _defs_sequencer_select:
     def circle_timeline():
         def draw_settings(_context, layout, tool):
             props = tool.operator_properties("sequencer.select_circle")
-            row = layout.row()
-            row.use_property_split = False
-            row.prop(props, "mode", text="", expand=True, icon_only=True)
+            _draw_select_mode(_context, layout, props)
             layout.prop(props, "radius")
 
         def draw_cursor(_context, tool, xy):
@@ -3378,9 +3356,7 @@ class _defs_sequencer_select:
     def circle_preview():
         def draw_settings(_context, layout, tool):
             props = tool.operator_properties("sequencer.select_circle")
-            row = layout.row()
-            row.use_property_split = False
-            row.prop(props, "mode", text="", expand=True, icon_only=True)
+            _draw_select_mode(_context, layout, props)
             layout.prop(props, "radius")
 
         def draw_cursor(_context, tool, xy):

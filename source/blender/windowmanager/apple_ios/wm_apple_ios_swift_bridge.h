@@ -60,6 +60,8 @@ UIImage *_Nullable wm_apple_ios_icon(NSString *_Nonnull key, NSString *_Nullable
 UIImage *_Nullable wm_apple_ios_brush_image(NSString *_Nonnull preview, CGFloat diameter);
 void WM_apple_ios_ui_tool_set_by_id(const char *_Nonnull tool_id);
 void WM_apple_ios_ui_brush_activate(const char *_Nonnull brush_id);
+/** Held + and -: 0 for neither, 1 to add, 2 to subtract, see #IOSSelectIntent. */
+void WM_apple_ios_ui_select_intent_set(int intent);
 char *_Nullable WM_apple_ios_ui_panels_take_json(void);
 char *_Nullable WM_apple_ios_ui_timeline_take_json(void);
 char *_Nullable WM_apple_ios_ui_assets_take_json(void);
