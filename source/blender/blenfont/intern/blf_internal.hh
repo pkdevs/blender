@@ -188,10 +188,18 @@ void blf_glyph_cache_release(FontBLF *font);
 void blf_glyph_cache_clear(FontBLF *font);
 
 /**
- * Create (or load from cache) a fully-rendered bitmap glyph.
+ * Create (or load from cache) a fully-rendered bitmap glyph, with the size and style of \a font
+ * and stored in \a gc, its cache.
+ *
+ * \param glyph_index: Index of the glyph in \a glyph_font (\a font if null), as given by text
+ * shaping. When zero, the glyph for \a charcode is looked up in \a font and its fallbacks.
  */
-GlyphBLF *blf_glyph_ensure(
-    FontBLF *font, GlyphCacheBLF *gc, uint charcode, uint glyph_index = 0, uint8_t subpixel = 0);
+GlyphBLF *blf_glyph_ensure(FontBLF *font,
+                           GlyphCacheBLF *gc,
+                           uint charcode,
+                           uint glyph_index = 0,
+                           FontBLF *glyph_font = nullptr,
+                           uint8_t subpixel = 0);
 
 /**
  * Find or re-create a glyph previously returned by #blf_glyph_ensure, identified by the font it

@@ -169,7 +169,6 @@ ShapingData::ShapingData(FontBLF *font,
   hb_script_t last_script = HB_SCRIPT_UNKNOWN;
   hb_buffer_t *hb_buf = hb_buffer_create();
   this->bounds.xmin = INT_MAX;
-  bool single_gc = true;
 
   if (!hb_buf) {
     return; /* Out of memory. */
@@ -248,28 +247,16 @@ ShapingData::ShapingData(FontBLF *font,
     hb_buffer_set_cluster_level(hb_buf, HB_BUFFER_CLUSTER_LEVEL_MONOTONE_CHARACTERS);
 
     /* Variable font axes, the same as used to render the glyphs of this segment, so the advances
-     * match the glyphs (bold and italic, width factor, slant direction, optical size). */
+     * match the glyphs (bold and italic, width factor, slant direction, optical size). The glyphs
+     * of all segments take their style from the main font. */
     float var_coords[BLF_VARIATIONS_MAX];
-    const int var_coords_num = blf_glyph_variation_coords(segment_font, segment_font, var_coords);
+    const int var_coords_num = blf_glyph_variation_coords(font, segment_font, var_coords);
     hb_font_set_var_coords_design(segment_font->hb_font, var_coords, uint(var_coords_num));
-
-    const bool need_release = (!gc || segment_font != font);
-    GlyphCacheBLF *segment_gc = need_release ? blf_glyph_cache_acquire(segment_font) : gc;
-    if (segment_gc != gc) {
-      single_gc = false;
-    }
 
     hb_segment_properties_t props;
     hb_buffer_get_segment_properties(hb_buf, &props);
 
     hb_shape(segment_font->hb_font, hb_buf, otf_features.data(), uint(otf_features.size()));
-
-    /* Unlikely. Drawing monospaced but changed mid-string to a proportional font. */
-    const bool set_mono = segment_font != font && font->flags & BLF_MONOSPACED &&
-                          !(segment_font->flags & BLF_MONOSPACED);
-    if (set_mono) {
-      segment_font->flags |= BLF_MONOSPACED;
-    }
 
     const int cwidth = std::max(gc->fixed_width, 1);
     uint glyph_count;
@@ -282,7 +269,7 @@ ShapingData::ShapingData(FontBLF *font,
       /* Safety clamp; cluster should normally be within range. */
       const uint32_t cluster = std::min(hb_glyph_info[i].cluster, uint32_t(char_count - 1));
       const char32_t codepoint = str32[cluster];
-      GlyphBLF *g = blf_glyph_ensure(segment_font, segment_gc, codepoint, glyph_id);
+      GlyphBLF *g = blf_glyph_ensure(font, gc, codepoint, glyph_id, segment_font);
       int advance;
       if (font->flags & BLF_MONOSPACED) {
         advance = ft_pix_from_int(cwidth) * BLI_wcwidth_safe(codepoint);
@@ -306,7 +293,7 @@ ShapingData::ShapingData(FontBLF *font,
         g->box_xmax = g->box_xmin + advance;
       }
 
-      g = blf_glyph_ensure_subpixel(segment_font, segment_gc, g, this->bounds.xmax);
+      g = blf_glyph_ensure_subpixel(font, gc, g, this->bounds.xmax);
 
       const rcti bounds = {this->bounds.xmax + glyph_pos[i].x_offset,
                            this->bounds.xmax + g->box_xmax + glyph_pos[i].x_offset,
@@ -315,12 +302,12 @@ ShapingData::ShapingData(FontBLF *font,
 
       if (props.direction == HB_DIRECTION_RTL) {
         /* Purposely use glyph-ordered offsets to simplify editing for now. */
-        this->glyphs.append({font, segment_gc, g, bounds, glyph_str8_offset});
+        this->glyphs.append({font, gc, g, bounds, glyph_str8_offset});
         glyph_str8_offset += BLI_str_utf8_from_unicode_len(codepoint);
       }
       else {
         /* Use precomputed UTF-8 byte offset for the glyph's cluster. */
-        this->glyphs.append({font, segment_gc, g, bounds, utf8_offsets[cluster]});
+        this->glyphs.append({font, gc, g, bounds, utf8_offsets[cluster]});
       }
 
       this->bounds.xmin = std::min(this->bounds.xmin, bounds.xmin + g->box_xmin);
@@ -328,23 +315,13 @@ ShapingData::ShapingData(FontBLF *font,
       this->bounds.ymin = std::min(this->bounds.ymin, bounds.ymin + g->box_ymin);
       this->bounds.ymax = std::max(this->bounds.ymax, bounds.ymin + g->box_ymax);
     }
-
-    if (set_mono) {
-      segment_font->flags &= ~BLF_MONOSPACED;
-    }
-
-    if (need_release) {
-      blf_glyph_cache_release(segment_font);
-    }
   }
   if (hb_buf) {
     hb_buffer_destroy(hb_buf);
   }
 
   const size_t glyph_count = this->glyphs.size();
-  if (gc && single_gc && glyph_count > 0 && glyph_count < 128 &&
-      !gc->shaping_cache.contains(cache_key))
-  {
+  if (gc && glyph_count > 0 && glyph_count < 128 && !gc->shaping_cache.contains(cache_key)) {
     CachedString cache_string;
     cache_string.str_len = len;
     cache_string.bounds = this->bounds;

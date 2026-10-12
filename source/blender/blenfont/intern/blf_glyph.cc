@@ -1452,6 +1452,7 @@ GlyphBLF *blf_glyph_ensure(FontBLF *font,
                            GlyphCacheBLF *gc,
                            const uint charcode,
                            uint glyph_index,
+                           FontBLF *glyph_font,
                            const uint8_t subpixel)
 {
   if (charcode < 32) {
@@ -1465,7 +1466,7 @@ GlyphBLF *blf_glyph_ensure(FontBLF *font,
   }
 
   /* Glyph might not come from the initial font. */
-  FontBLF *font_with_glyph = font;
+  FontBLF *font_with_glyph = (glyph_index && glyph_font) ? glyph_font : font;
   if (!glyph_index && charcode) {
     glyph_index = blf_glyph_index_from_charcode(&font_with_glyph, charcode);
   }
