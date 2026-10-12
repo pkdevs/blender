@@ -219,26 +219,26 @@ template<typename T, int VecSize> struct TypeSplitInfo<VecBase<T, VecSize>> {
   }
 };
 
-template<> struct TypeSplitInfo<ColorGeometry4f> {
+template<typename ColorT, typename ChannelT> struct TypeSplitInfoColorRGBA {
   static constexpr bool supports_split = true;
   static constexpr int channels = 4;
   template<int64_t MaxChunkSize>
-  using Split = std::array<std::array<float, MaxChunkSize>, channels>;
+  using Split = std::array<std::array<ChannelT, MaxChunkSize>, channels>;
 
   template<int64_t MaxChunkSize>
-  static ColorGeometry4f fetch(const Split<MaxChunkSize> &split, const int64_t i)
+  static ColorT fetch(const Split<MaxChunkSize> &split, const int64_t i)
   {
-    return ColorGeometry4f(split[0][i], split[1][i], split[2][i], split[3][i]);
+    return ColorT(split[0][i], split[1][i], split[2][i], split[3][i]);
   }
 
   template<int64_t MaxChunkSize>
-  static void store(Split<MaxChunkSize> &split, const int64_t i, const ColorGeometry4f &v)
+  static void store(Split<MaxChunkSize> &split, const int64_t i, const ColorT &v)
   {
     unroll<channels>([&](const auto j) { split[j][i] = v[j]; });
   }
 
   template<int64_t MaxChunkSize>
-  static void split(const int64_t size, const ColorGeometry4f *values, Split<MaxChunkSize> &split)
+  static void split(const int64_t size, const ColorT *values, Split<MaxChunkSize> &split)
   {
     for (const int64_t i : IndexRange(size)) {
       store<MaxChunkSize>(split, i, values[i]);
@@ -246,15 +246,29 @@ template<> struct TypeSplitInfo<ColorGeometry4f> {
   }
 
   template<int64_t MaxChunkSize>
-  static void merge(const int64_t size,
-                    const Split<MaxChunkSize> &split,
-                    ColorGeometry4f *r_values)
+  static void merge(const int64_t size, const Split<MaxChunkSize> &split, ColorT *r_values)
   {
     for (const int64_t i : IndexRange(size)) {
       r_values[i] = fetch<MaxChunkSize>(split, i);
     }
   }
 };
+
+template<typename ChannelT, eSpace Space, eAlpha Alpha>
+struct TypeSplitInfo<ColorRGBA<ChannelT, Space, Alpha>>
+    : TypeSplitInfoColorRGBA<ColorRGBA<ChannelT, Space, Alpha>, ChannelT> {};
+
+template<eAlpha Alpha>
+struct TypeSplitInfo<ColorSceneLinear4f<Alpha>>
+    : TypeSplitInfoColorRGBA<ColorSceneLinear4f<Alpha>, float> {};
+
+template<eAlpha Alpha>
+struct TypeSplitInfo<ColorSceneLinearByteEncoded4b<Alpha>>
+    : TypeSplitInfoColorRGBA<ColorSceneLinearByteEncoded4b<Alpha>, uint8_t> {};
+
+template<typename ChannelT>
+struct TypeSplitInfo<ColorTheme4<ChannelT>>
+    : TypeSplitInfoColorRGBA<ColorTheme4<ChannelT>, ChannelT> {};
 
 template<int64_t MaxChunkSize,
          typename ElementFn,
