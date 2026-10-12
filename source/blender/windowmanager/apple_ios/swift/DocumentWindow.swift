@@ -150,7 +150,11 @@ public final class DocumentController: UIHostingController<DocumentWindow> {
 
   override public func viewSafeAreaInsetsDidChange() {
     super.viewSafeAreaInsetsDidChange()
-    if model.safeAreaInsets != view.safeAreaInsets { model.safeAreaInsets = view.safeAreaInsets }
+    /* The window's sides are kept by the layout itself, which keeps the viewport beside them. */
+    var insets = view.safeAreaInsets
+    insets.left = 0
+    insets.right = 0
+    if model.safeAreaInsets != insets { model.safeAreaInsets = insets }
   }
 
   override public func viewDidLayoutSubviews() {
@@ -316,37 +320,43 @@ public struct DocumentWindow: View {
         }
     }
     else {
-      splitView
+      columns
     }
 #endif
   }
 
 #if !os(visionOS)
-  private var splitView: some View {
-    NavigationSplitView(columnVisibility: sidebar) {
-      HierarchyPanel(store: shell.panels.hierarchy) { shell.panels.setHierarchyShown(false) }
-        .environment(\.panelInWindow, true)
-        .navigationSplitViewColumnWidth(min: 260, ideal: 300, max: 400)
-        .toolbar(removing: .sidebarToggle)
-    } detail: {
+  /** The Outliner and Properties slide in from the window's sides and push the viewport over, in
+   * one animation with it. Only one fits beside the viewport in a narrow window. */
+  private var columns: some View {
+    HStack(spacing: 0) {
+      if model.hierarchyShown && controlsShown {
+        HierarchyPanel(store: shell.panels.hierarchy) { shell.panels.setHierarchyShown(false) }
+          .environment(\.panelInWindow, true)
+          .frame(width: 320)
+          .background(Color(uiColor: .secondarySystemBackground).ignoresSafeArea())
+          .transition(.move(edge: .leading))
+          .accessibilityIdentifier("blender.hierarchy.panel")
+      }
       editor
-        .inspector(isPresented: inspector) {
+      if model.inspectorShown && controlsShown {
+        NavigationStack {
           InspectorPanel(store: shell.panels.inspector) { shell.panels.setInspectorShown(false) }
             .environment(\.panelInWindow, true)
-            .inspectorColumnWidth(min: 300, ideal: 336, max: 420)
+            .toolbar(.hidden, for: .navigationBar)
         }
+        .frame(width: 336)
+        .background(Color(uiColor: .secondarySystemBackground).ignoresSafeArea())
+        .transition(.move(edge: .trailing))
+        .accessibilityIdentifier("blender.inspector.panel")
+      }
     }
-    .navigationSplitViewStyle(.balanced)
+    .onGeometryChange(for: Bool.self) { $0.size.width < 1000 } action: { shell.panels.narrow = $0 }
   }
 #endif
 
   private var hierarchySheet: Binding<Bool> {
     Binding(get: { model.hierarchyShown && controlsShown }, set: { shell.panels.setHierarchyShown($0) })
-  }
-
-  private var sidebar: Binding<NavigationSplitViewVisibility> {
-    Binding(get: { model.hierarchyShown && controlsShown ? .all : .detailOnly },
-            set: { shell.panels.setHierarchyShown($0 != .detailOnly) })
   }
 
   private var inspector: Binding<Bool> {
@@ -374,20 +384,10 @@ public struct DocumentWindow: View {
    * toolbar. */
   private var layers: some View {
     ZStack {
-      /* The sidebar and inspector are the viewport column's safe area beyond the window's own: the
-       * viewport and its controls keep beside them. */
-      Color.clear
-        .ignoresSafeArea()
-        .onGeometryChange(for: EdgeInsets.self) { $0.safeAreaInsets } action: { insets in
-          let sides = EdgeInsets(top: 0, leading: max(0, insets.leading - model.safeAreaInsets.left), bottom: 0,
-                                 trailing: max(0, insets.trailing - model.safeAreaInsets.right))
-          if model.columnInsets != sides { model.columnInsets = sides }
-        }
-      /* The layers inside keep out of the side safe areas, so they stay beside the columns. */
+      /* Under the bars, but beside the sidebar and inspector, which are the side safe areas: the
+       * viewport and its controls move with the columns as they slide. */
       viewportLayers
-        .padding(.leading, model.columnInsets.leading)
-        .padding(.trailing, model.columnInsets.trailing)
-        .ignoresSafeArea()
+        .ignoresSafeArea(edges: .vertical)
       CompileIndicator(progress: shell.compile)
     }
   }

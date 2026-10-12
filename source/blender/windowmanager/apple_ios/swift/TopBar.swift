@@ -349,15 +349,12 @@ struct DocumentToolbar: ToolbarContent {
         .sharedBackgroundVisibility(.hidden)
 #endif
     }
+    if model.compact {
+      /* Undo stays in reach on a phone, beside the items above. */
 #if !os(visionOS)
-    ToolbarSpacer(.fixed, placement: .topBarLeading)
+      ToolbarSpacer(.fixed, placement: .topBarLeading)
 #endif
-    ToolbarItem(placement: .topBarLeading) {
-      Button { Engine.operatorCall("ED_OT_undo") } label: {
-        Label { Text("Undo") } icon: { iconImage(wm_apple_ios_icon("operator.ED_OT_undo", "arrow.uturn.backward")) }
-      }
-        .disabled(!model.canUndo)
-        .accessibilityIdentifier("blender.undo")
+      ToolbarItem(placement: .topBarLeading) { undoButton }
     }
     if model.compact {
       /* Everything else in one menu, as nothing else fits beside the most used items. */
@@ -385,7 +382,9 @@ struct DocumentToolbar: ToolbarContent {
 #if !os(visionOS)
     ToolbarSpacer(.fixed, placement: .topBarTrailing)
 #endif
+    /* Undo, Share and More together. */
     ToolbarItemGroup(placement: .topBarTrailing) {
+      undoButton
       UIMenuButton(title: nil, image: UIImage(systemName: "square.and.arrow.up"), style: .plain,
                    accessibilityLabel: "Share", tint: .label, deferred: false) { commands.shareMenu() }
         .frame(width: 44, height: 44)
@@ -404,8 +403,15 @@ struct DocumentToolbar: ToolbarContent {
     }
   }
 
-  /** The sidebar: a tap shows or hides the Outliner beside the viewport, and its
-   * menu chooses what else shows. */
+  private var undoButton: some View {
+    Button { Engine.operatorCall("ED_OT_undo") } label: {
+      Label { Text("Undo") } icon: { iconImage(wm_apple_ios_icon("operator.ED_OT_undo", "arrow.uturn.backward")) }
+    }
+    .disabled(!model.canUndo)
+    .accessibilityIdentifier("blender.undo")
+  }
+
+  /** The sidebar: its menu chooses what shows beside and below the viewport. */
   private var sidebarMenu: some View {
     Menu {
       Toggle("Outliner", systemImage: "list.bullet.indent", isOn: Binding(
@@ -416,8 +422,6 @@ struct DocumentToolbar: ToolbarContent {
         get: { model.assetsShown }, set: { _ in shell.assets.toggle() }))
     } label: {
       Label("Sidebar", systemImage: "sidebar.leading")
-    } primaryAction: {
-      shell.panels.toggleHierarchy()
     }
     .accessibilityIdentifier("blender.sidebar")
   }

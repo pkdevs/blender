@@ -31,6 +31,12 @@ final class SwiftScenePanels {
 
   private var showInspector = false
   private var showHierarchy = false
+  /** A narrow window, where only one of Properties and the Outliner fits beside the viewport. */
+  var narrow = false {
+    didSet {
+      if narrow && showInspector && showHierarchy { setHierarchyShown(false) }
+    }
+  }
   private var shadingVisible = false
 
   init() {
@@ -69,12 +75,14 @@ final class SwiftScenePanels {
   func setInspectorShown(_ shown: Bool) {
     guard shown != showInspector else { return }
     showInspector = shown
+    if shown && narrow { showHierarchy = false }
     applyVisibility()
   }
 
   func setHierarchyShown(_ shown: Bool) {
     guard shown != showHierarchy else { return }
     showHierarchy = shown
+    if shown && narrow { showInspector = false }
     applyVisibility()
   }
 
