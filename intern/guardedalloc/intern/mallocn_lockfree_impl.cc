@@ -31,6 +31,7 @@
 #include "atomic_ops.h"
 #include "mallocn_intern.hh"
 #include "mallocn_intern_function_pointers.hh"
+#include "memory_usage.hh"
 
 using namespace mem_guarded::internal;
 

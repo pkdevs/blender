@@ -91,8 +91,6 @@ extern bool leak_detector_has_run;
 extern char free_after_leak_detection_message[];
 
 void memory_usage_init(void);
-void memory_usage_block_alloc(size_t size);
-void memory_usage_block_free(size_t size);
 size_t memory_usage_block_num(void);
 size_t memory_usage_current(void);
 /**
