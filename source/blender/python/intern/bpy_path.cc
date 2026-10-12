@@ -15,6 +15,7 @@
 #include "../generic/py_capi_utils.hh"
 
 #include "BKE_autoexec.hh"
+#include "BKE_path_templates.hh"
 
 /* #include "IMB_imbuf_types.hh" */
 
@@ -104,11 +105,38 @@ static PyObject *bpy_path_is_autoexec(PyObject * /*self*/, PyObject *args, PyObj
   return result;
 }
 
+PyDoc_STRVAR(
+    /* Wrap. */
+    bpy_path_template_escape_doc,
+    ".. function:: template_escape(path)\n"
+    "\n"
+    "   Escape ``{`` and ``}`` in a path, so they are not treated as path templates.\n"
+    "\n"
+    "   :param path: The path to escape.\n"
+    "   :type path: str\n"
+    "   :return: The escaped path.\n"
+    "   :rtype: str\n");
+static PyObject *bpy_path_template_escape(PyObject * /*self*/, PyObject *value)
+{
+  Py_ssize_t path_len;
+  const char *path = PyUnicode_AsUTF8AndSize(value, &path_len);
+  if (path == nullptr) {
+    PyErr_Format(PyExc_TypeError,
+                 "template_escape: expected a string, not %.200s",
+                 Py_TYPE(value)->tp_name);
+    return nullptr;
+  }
+
+  const std::string escaped = BKE_path_template_escape(StringRef(path, path_len));
+  return PyUnicode_FromStringAndSize(escaped.data(), escaped.size());
+}
+
 static PyMethodDef _bpy_path_methods[] = {
     {"is_autoexec",
      reinterpret_cast<PyCFunction>(bpy_path_is_autoexec),
      METH_VARARGS | METH_KEYWORDS,
      bpy_path_is_autoexec_doc},
+    {"template_escape", bpy_path_template_escape, METH_O, bpy_path_template_escape_doc},
     {nullptr, nullptr, 0, nullptr},
 };
 
