@@ -942,10 +942,11 @@ static void ensure_non_lazy_normals(Mesh *mesh)
       if (!edit_data.vert_positions.is_empty()) {
         /* Note that 'ensure' is acceptable here since these values aren't modified in-place.
          * If that changes we'll need to recalculate. */
-        BKE_editmesh_cache_ensure_vert_normals(*mesh->runtime->edit_mesh, edit_data);
+        BKE_editmesh_cache_ensure_vert_normals(*BKE_editmesh_bmesh_get_for_write(mesh), edit_data);
       }
       else {
-        BM_mesh_normals_update(mesh->runtime->edit_mesh->bm);
+        BMesh *bm = BKE_editmesh_bmesh_get_for_write(mesh);
+        BM_mesh_normals_update(bm);
       }
       break;
     }
@@ -1024,7 +1025,6 @@ bool BKE_modifier_deform_verts(ModifierData *md,
 
 void BKE_modifier_deform_vertsEM(ModifierData *md,
                                  const ModifierEvalContext *ctx,
-                                 const BMEditMesh *em,
                                  Mesh *mesh,
                                  MutableSpan<float3> positions)
 {
@@ -1032,7 +1032,7 @@ void BKE_modifier_deform_vertsEM(ModifierData *md,
   if (mesh && mti->depends_on_normals && mti->depends_on_normals(md)) {
     ensure_non_lazy_normals(mesh);
   }
-  mti->deform_verts_EM(md, ctx, em, mesh, positions);
+  mti->deform_verts_EM(md, ctx, mesh, positions);
 }
 
 /* end modifier callback wrappers */
