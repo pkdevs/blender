@@ -149,8 +149,10 @@ typedef struct UserInputEvent {
 #if defined(APPLE_TARGET_VISIONOS)
 @interface GHOSTUIWindow : UIWindow <UIGestureRecognizerDelegate, GHOST_IOSInputWindow>
 #else
-@interface GHOSTUIWindow
-    : UIWindow <UIGestureRecognizerDelegate, UIPencilInteractionDelegate, GHOST_IOSInputWindow>
+@interface GHOSTUIWindow : UIWindow <UIGestureRecognizerDelegate,
+                                      UIPencilInteractionDelegate,
+                                      UIPointerInteractionDelegate,
+                                      GHOST_IOSInputWindow>
 #endif
 {
   GHOST_SystemIOS *system;
@@ -174,6 +176,7 @@ typedef struct UserInputEvent {
 
 #if !defined(APPLE_TARGET_VISIONOS)
   /* A mouse or trackpad: the pointer, its buttons, scrolling and trackpad gestures. */
+  UIPointerInteraction *pointer_interaction;
   UIHoverGestureRecognizer *pointer_hover_recognizer;
   UIPanGestureRecognizer *trackpad_scroll_recognizer;
   UIPanGestureRecognizer *wheel_scroll_recognizer;

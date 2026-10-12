@@ -189,6 +189,7 @@ UIWindow *document_window = nil;
   [self releaseKeys];
 #if !defined(APPLE_TARGET_VISIONOS)
   [self releasePointerButtons];
+  [window->getView() removeInteraction:pointer_interaction];
 #endif
   [self cancelPencilStroke];
   [self stopOrbitMomentum];
@@ -394,7 +395,10 @@ UIWindow *document_window = nil;
   current_pencil_touch = nil;
 
 #if !defined(APPLE_TARGET_VISIONOS)
-  /* A mouse or trackpad, as on the desktop: the pointer moves Blender's cursor. */
+  /* A mouse or trackpad, as on the desktop: the pointer moves Blender's cursor and shows it. */
+  pointer_interaction = [[UIPointerInteraction alloc] initWithDelegate:self];
+  [window->getView() addInteraction:pointer_interaction];
+
   pointer_hover_recognizer = [[UIHoverGestureRecognizer alloc]
       initWithTarget:self
               action:@selector(handlePointerHover:)];
@@ -994,7 +998,7 @@ UIWindow *document_window = nil;
  *
  * As on the desktop: the pointer moves Blender's cursor and its buttons are mouse buttons, a
  * mouse wheel scrolls in steps, and a trackpad's two-finger scroll, pinch and twist are trackpad
- * gestures as on a Mac. */
+ * gestures as on a Mac. The pointer shows Blender's cursor over the view. */
 
 - (bool)pointerOverViewport:(CGPoint)location_in_window
 {
@@ -1249,6 +1253,113 @@ static int32_t trackpad_units(double value, double *remainder)
   }
 }
 
+/* Shapes for the pointer, around its point. */
+static UIBezierPath *pointer_crosshair()
+{
+  UIBezierPath *path = [UIBezierPath bezierPathWithRect:CGRectMake(-9, -0.75, 18, 1.5)];
+  [path appendPath:[UIBezierPath bezierPathWithRect:CGRectMake(-0.75, -9, 1.5, 18)]];
+  return path;
+}
+
+/** A double arrow along x, turned a quarter for y. */
+static UIBezierPath *pointer_double_arrow(bool vertical)
+{
+  UIBezierPath *path = [UIBezierPath bezierPath];
+  [path moveToPoint:CGPointMake(-10, 0)];
+  [path addLineToPoint:CGPointMake(-5, -5)];
+  [path addLineToPoint:CGPointMake(-5, -1.25)];
+  [path addLineToPoint:CGPointMake(5, -1.25)];
+  [path addLineToPoint:CGPointMake(5, -5)];
+  [path addLineToPoint:CGPointMake(10, 0)];
+  [path addLineToPoint:CGPointMake(5, 5)];
+  [path addLineToPoint:CGPointMake(5, 1.25)];
+  [path addLineToPoint:CGPointMake(-5, 1.25)];
+  [path addLineToPoint:CGPointMake(-5, 5)];
+  [path closePath];
+  if (vertical) {
+    [path applyTransform:CGAffineTransformMakeRotation(M_PI_2)];
+  }
+  return path;
+}
+
+static UIBezierPath *pointer_move()
+{
+  UIBezierPath *path = pointer_double_arrow(false);
+  [path appendPath:pointer_double_arrow(true)];
+  path.usesEvenOddFillRule = NO;
+  return path;
+}
+
+- (void)refreshPointer
+{
+  [pointer_interaction invalidate];
+}
+
+- (UIPointerRegion *)pointerInteraction:(UIPointerInteraction *)interaction
+                       regionForRequest:(UIPointerRegionRequest *)request
+                          defaultRegion:(UIPointerRegion *)defaultRegion
+{
+  UNUSED_VARS(interaction, request);
+  return defaultRegion;
+}
+
+- (UIPointerStyle *)pointerInteraction:(UIPointerInteraction *)interaction
+                        styleForRegion:(UIPointerRegion *)region
+{
+  UNUSED_VARS(interaction, region);
+  if (!window) {
+    return nil;
+  }
+  if (!window->pointer_cursor_visible.load()) {
+    return [UIPointerStyle hiddenPointerStyle];
+  }
+  UIBezierPath *path = nil;
+  switch (GHOST_TStandardCursor(window->pointer_cursor.load())) {
+    case GHOST_kStandardCursorText:
+      return [UIPointerStyle
+          styleWithShape:[UIPointerShape beamWithPreferredLength:22 axis:UIAxisVertical]
+          constrainedAxes:UIAxisNeither];
+    case GHOST_kStandardCursorCrosshair:
+    case GHOST_kStandardCursorCrosshairA:
+    case GHOST_kStandardCursorCrosshairB:
+    case GHOST_kStandardCursorCrosshairC:
+    case GHOST_kStandardCursorPencil:
+    case GHOST_kStandardCursorEraser:
+    case GHOST_kStandardCursorKnife:
+    case GHOST_kStandardCursorEyedropper:
+    case GHOST_kStandardCursorBlade:
+    case GHOST_kStandardCursorCustom:
+      path = pointer_crosshair();
+      break;
+    case GHOST_kStandardCursorMove:
+    case GHOST_kStandardCursorNSEWScroll:
+      path = pointer_move();
+      break;
+    case GHOST_kStandardCursorVerticalSplit:
+    case GHOST_kStandardCursorLeftRight:
+    case GHOST_kStandardCursorEWScroll:
+    case GHOST_kStandardCursorLeftSide:
+    case GHOST_kStandardCursorRightSide:
+    case GHOST_kStandardCursorLeftHandle:
+    case GHOST_kStandardCursorRightHandle:
+    case GHOST_kStandardCursorBothHandles:
+    case GHOST_kStandardCursorSlip:
+      path = pointer_double_arrow(false);
+      break;
+    case GHOST_kStandardCursorHorizontalSplit:
+    case GHOST_kStandardCursorUpDown:
+    case GHOST_kStandardCursorNSScroll:
+    case GHOST_kStandardCursorTopSide:
+    case GHOST_kStandardCursorBottomSide:
+      path = pointer_double_arrow(true);
+      break;
+    default:
+      /* The iPad's own pointer, for Blender's arrows and the rest. */
+      return nil;
+  }
+  return [UIPointerStyle styleWithShape:[UIPointerShape shapeWithPath:path]
+                        constrainedAxes:UIAxisNeither];
+}
 #endif
 
 - (void)handleNavigationTap:(UITapGestureRecognizer *)gesture
@@ -2604,18 +2715,39 @@ bool GHOST_WindowIOS::isDialog() const
   return is_dialog_;
 }
 
-GHOST_TSuccess GHOST_WindowIOS::setWindowCursorVisibility(bool /*visible*/)
+/** The pointer takes Blender's cursor over the view, see #GHOSTUIWindow. */
+void GHOST_WindowIOS::refreshPointer()
 {
+#if !defined(APPLE_TARGET_VISIONOS)
+  GHOSTUIWindow *ghost_window = (GHOSTUIWindow *)rootWindow;
+  std::shared_ptr<std::atomic<bool>> alive = input_alive;
+  dispatch_async(dispatch_get_main_queue(), ^{
+    if (alive->load()) {
+      [ghost_window refreshPointer];
+    }
+  });
+#endif
+}
+
+GHOST_TSuccess GHOST_WindowIOS::setWindowCursorVisibility(bool visible)
+{
+  if (pointer_cursor_visible.exchange(visible) != visible) {
+    refreshPointer();
+  }
   return GHOST_kSuccess;
 }
 
 GHOST_TSuccess GHOST_WindowIOS::setWindowCursorGrab(GHOST_TGrabCursorMode /*mode*/)
 {
+  /* The pointer can't be moved by apps: Blender draws its own cursor while it grabs. */
   return GHOST_kSuccess;
 }
 
-GHOST_TSuccess GHOST_WindowIOS::setWindowCursorShape(GHOST_TStandardCursor /*shape*/)
+GHOST_TSuccess GHOST_WindowIOS::setWindowCursorShape(GHOST_TStandardCursor shape)
 {
+  if (pointer_cursor.exchange(shape) != shape) {
+    refreshPointer();
+  }
   return GHOST_kSuccess;
 }
 
@@ -2624,16 +2756,14 @@ GHOST_TSuccess GHOST_WindowIOS::hasCursorShape(GHOST_TStandardCursor /*shape*/)
   return GHOST_kSuccess;
 }
 
-/** Reverse the bits in a uint16_t */
-
 GHOST_TSuccess GHOST_WindowIOS::setWindowCustomCursorShape(const uint8_t * /*bitmap*/,
                                                            const uint8_t * /*mask*/,
                                                            const int /*size*/[2],
                                                            const int /*hot_spot*/[2],
                                                            bool /*canInvertColor*/)
 {
-  /* Passthrough for iOS. */
-  return GHOST_kSuccess;
+  /* The pointer can't show a bitmap: it shows a crosshair, as for tools. */
+  return setWindowCursorShape(GHOST_kStandardCursorCustom);
 }
 
 uint16_t GHOST_WindowIOS::getDPIHint()

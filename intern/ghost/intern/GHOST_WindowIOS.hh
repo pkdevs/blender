@@ -316,6 +316,9 @@ class GHOST_WindowIOS : public GHOST_Window {
   /** \copydoc #GHOST_IWindow::getDPIHint */
   uint16_t getDPIHint();
 
+  /** Show the cursor's shape and visibility on the pointer. */
+  void refreshPointer();
+
   /** The mother SystemCocoa class to send events */
   GHOST_SystemIOS *system_ios_;
 
@@ -348,6 +351,11 @@ class GHOST_WindowIOS : public GHOST_Window {
     return uiview_;
   }
   CGPoint scalePointToWindow(CGPoint &point);
+
+  /** The cursor Blender shows, which the pointer takes over the view, see
+   * #GHOSTUIWindow.pointerInteraction:styleForRegion:. */
+  std::atomic<int> pointer_cursor{GHOST_kStandardCursorDefault};
+  std::atomic<bool> pointer_cursor_visible{true};
 
   void updatePointerPosition(int32_t x, int32_t y)
   {
