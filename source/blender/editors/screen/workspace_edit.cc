@@ -718,20 +718,18 @@ static wmOperatorStatus workspace_reorder_to_left_right_exec(bContext *C, wmOper
   WorkSpace *workspace = workspace_context_get(C);
   ReorderDirection direction = ReorderDirection(RNA_enum_get(op->ptr, "direction"));
 
-  Vector<ID *> ordered_workspaces = BKE_id_ordered_list(
-      reinterpret_cast<const ListBaseT<ID> *>(&bmain->workspaces));
+  Vector<ID *> ordered_workspaces = BKE_id_ordered_list(&bmain->workspaces.cast<ID>());
   const int active_index = ordered_workspaces.first_index_of(&workspace->id);
-  if (active_index <= 0 || ordered_workspaces.size() == 1) {
+
+  const int target_index = active_index + (direction == ReorderDirection::LEFT ? -1 : 1);
+
+  if (target_index < 0 || target_index >= ordered_workspaces.size()) {
     return OPERATOR_CANCELLED;
   }
 
-  const int target_index = (direction == ReorderDirection::LEFT) ? active_index - 1 :
-                                                                   active_index + 1;
   WorkSpace *target_workspace = reinterpret_cast<WorkSpace *>(ordered_workspaces[target_index]);
 
-  int tmp = target_workspace->order;
-  target_workspace->order = workspace->order;
-  workspace->order = tmp;
+  std::swap(workspace->order, target_workspace->order);
 
   WM_event_add_notifier(C, NC_WINDOW, nullptr);
 
