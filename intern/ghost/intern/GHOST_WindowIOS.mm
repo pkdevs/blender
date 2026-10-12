@@ -187,6 +187,9 @@ UIWindow *document_window = nil;
 - (void)detachBlender
 {
   [self releaseKeys];
+#if !defined(APPLE_TARGET_VISIONOS)
+  [self releasePointerButtons];
+#endif
   [self cancelPencilStroke];
   [self stopOrbitMomentum];
   [self hideOnscreenKeyboard];
@@ -391,6 +394,14 @@ UIWindow *document_window = nil;
   current_pencil_touch = nil;
 
 #if !defined(APPLE_TARGET_VISIONOS)
+  /* A mouse or trackpad, as on the desktop: the pointer moves Blender's cursor. */
+  pointer_hover_recognizer = [[UIHoverGestureRecognizer alloc]
+      initWithTarget:self
+              action:@selector(handlePointerHover:)];
+  pointer_hover_recognizer.delegate = self;
+  pointer_hover_recognizer.allowedTouchTypes = @[ @(UITouchTypeIndirectPointer) ];
+  [self addGestureRecognizer:pointer_hover_recognizer];
+
   /**  Apple Pencil double-tap. */
   pencil_interaction = [[UIPencilInteraction alloc] init];
   pencil_interaction.delegate = self;
@@ -672,6 +683,12 @@ UIWindow *document_window = nil;
         }
         continue;
       }
+#if !defined(APPLE_TARGET_VISIONOS)
+      if (touch.type == UITouchTypeIndirectPointer) {
+        [self handlePointerTouch:touch event:event];
+        continue;
+      }
+#endif
       if (touch.type != UITouchTypePencil &&
           !(finger_tool_enabled && touch.type == UITouchTypeDirect && fingers <= 1))
       {
@@ -930,6 +947,128 @@ UIWindow *document_window = nil;
   [held_keys removeAllObjects];
 }
 
+#if !defined(APPLE_TARGET_VISIONOS)
+/* -------------------------------------------------------------------- */
+/* Mouse and trackpad
+ *
+ * As on the desktop: the pointer moves Blender's cursor and its buttons are mouse buttons. */
+
+- (bool)pointerOverViewport:(CGPoint)location_in_window
+{
+  return [self isBlenderPencilInputView:[self hitTest:location_in_window withEvent:nil]];
+}
+
+- (void)sendPointerMove:(CGPoint)location
+{
+  tablet_data = GHOST_TABLET_DATA_NONE;
+  CGPoint point = window->scalePointToWindow(location);
+  UserInputEvent event_info(&point, nullptr, nullptr, false);
+  event_info.add_event(UserInputEvent::EventTypes::CURSOR_MOVE);
+  [self generateUserInputEvents:event_info];
+}
+
+- (void)handlePointerHover:(UIHoverGestureRecognizer *)sender
+{
+  if (!window || pointer_touch) {
+    return;
+  }
+  const bool hovering = (sender.state == UIGestureRecognizerStateBegan ||
+                         sender.state == UIGestureRecognizerStateChanged) &&
+                        [self pointerOverViewport:[sender locationInView:self]];
+  if (!hovering) {
+    /* Paint cursors and hover highlights show while something hovers over the view. */
+    ios_pencil_hover(false, 0, 0);
+    return;
+  }
+  const CGPoint location = [sender locationInView:window->getView()];
+  [self sendPointerMove:location];
+  CGPoint point = location;
+  point = window->scalePointToWindow(point);
+  ios_pencil_hover(true, point.x, point.y);
+}
+
+static GHOST_TButton pointer_button(int index)
+{
+  switch (index) {
+    case 0:
+      return GHOST_kButtonMaskLeft;
+    case 1:
+      return GHOST_kButtonMaskRight;
+    case 2:
+      return GHOST_kButtonMaskMiddle;
+    case 3:
+      return GHOST_kButtonMaskButton4;
+    default:
+      return GHOST_kButtonMaskButton5;
+  }
+}
+
+- (void)sendPointerButtons:(UIEventButtonMask)buttons
+{
+  for (int index = 0; index < 5; index++) {
+    const UIEventButtonMask mask = UIEventButtonMaskForButtonNumber(index + 1);
+    if ((buttons & mask) == (pointer_buttons & mask)) {
+      continue;
+    }
+    system->pushEvent(std::make_unique<GHOST_EventButton>(system->getMilliSeconds(),
+                                                          (buttons & mask) ?
+                                                              GHOST_kEventButtonDown :
+                                                              GHOST_kEventButtonUp,
+                                                          window,
+                                                          pointer_button(index),
+                                                          GHOST_TABLET_DATA_NONE));
+  }
+  pointer_buttons = buttons;
+}
+
+/** A click or drag of the pointer, which began over the view. */
+- (void)handlePointerTouch:(UITouch *)touch event:(UIEvent *)event
+{
+  if (!window || !system) {
+    return;
+  }
+  if (touch.phase == UITouchPhaseBegan) {
+    if (pointer_touch || ![self touchBeganInBlenderViewport:touch]) {
+      return;
+    }
+    pointer_touch = touch;
+    pointer_buttons = 0;
+    ios_pencil_hover(false, 0, 0);
+  }
+  if (touch != pointer_touch) {
+    return;
+  }
+  const bool released = touch.phase == UITouchPhaseEnded ||
+                        touch.phase == UITouchPhaseCancelled;
+  if (touch.phase == UITouchPhaseMoved) {
+    NSArray<UITouch *> *samples = [event coalescedTouchesForTouch:touch];
+    for (UITouch *sample in samples.count ? samples : @[ touch ]) {
+      [self sendPointerMove:[sample preciseLocationInView:window->getView()]];
+    }
+  }
+  else {
+    [self sendPointerMove:[touch preciseLocationInView:window->getView()]];
+  }
+  /* A click without a mask, as from a tap on a trackpad, is the primary button. */
+  UIEventButtonMask buttons = event.buttonMask ? event.buttonMask : UIEventButtonMaskPrimary;
+  [self sendPointerButtons:released ? 0 : buttons];
+  if (released) {
+    pointer_touch = nil;
+  }
+}
+
+/** Release the pointer's buttons, as when the app leaves the foreground during a drag. */
+- (void)releasePointerButtons
+{
+  if (window && system) {
+    [self sendPointerButtons:0];
+  }
+  pointer_buttons = 0;
+  pointer_touch = nil;
+}
+
+#endif
+
 - (void)handleNavigationTap:(UITapGestureRecognizer *)gesture
 {
   if (!window || gesture.state != UIGestureRecognizerStateEnded) {
@@ -1081,6 +1220,9 @@ UIWindow *document_window = nil;
 {
   UNUSED_VARS(notification);
   [self releaseKeys];
+#if !defined(APPLE_TARGET_VISIONOS)
+  [self releasePointerButtons];
+#endif
   [self stopOrbitMomentum];
   [self cancelPencilStroke];
   [pencil_context_menu cancel];

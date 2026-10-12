@@ -171,6 +171,13 @@ typedef struct UserInputEvent {
 #endif
   // GHOSTUILongPressGestureRecognizer *long_press_gesture_recognizer;
 
+#if !defined(APPLE_TARGET_VISIONOS)
+  /* A mouse or trackpad: the pointer and its buttons. */
+  UIHoverGestureRecognizer *pointer_hover_recognizer;
+  UITouch *pointer_touch;
+  UIEventButtonMask pointer_buttons;
+#endif
+
   /* Data from the Apple pencil */
   UITouch *current_pencil_touch;
   GHOST_TabletData tablet_data;

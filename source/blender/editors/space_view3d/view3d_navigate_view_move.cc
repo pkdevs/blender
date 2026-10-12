@@ -108,8 +108,9 @@ static wmOperatorStatus viewmove_invoke_impl(bContext *C,
 static wmOperatorStatus viewmove_invoke(bContext *C, wmOperator *op, const wmEvent *event)
 {
 #if defined(WITH_APPLE_CROSSPLATFORM) && APPLE_TARGET_IOS
-  /* Finger panning must not consume unrelated pointer or active-tool events. */
-  if (event->type != MOUSEPAN || !(event->flag & WM_EVENT_MULTITOUCH_TWO_FINGERS)) {
+  /* The Pencil drives the active tool, not the view. A mouse or trackpad navigates as on the
+   * desktop. */
+  if (event->tablet.active != EVT_TABLET_NONE) {
     return OPERATOR_PASS_THROUGH;
   }
 #endif

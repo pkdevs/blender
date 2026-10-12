@@ -41,6 +41,8 @@
 	<false/>
 	<key>UILaunchScreen</key>
 	<dict/>
+	<key>UIApplicationSupportsIndirectInputEvents</key>
+	<true/>
 	<key>UIApplicationSceneManifest</key>
 	<dict>
 		<key>UIApplicationSupportsMultipleScenes</key>

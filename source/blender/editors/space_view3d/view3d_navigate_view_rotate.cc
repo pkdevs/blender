@@ -395,8 +395,9 @@ static wmOperatorStatus viewrotate_invoke(bContext *C, wmOperator *op, const wmE
 {
 #if defined(WITH_APPLE_CROSSPLATFORM) && APPLE_TARGET_IOS
   /* iPad viewport navigation: one-finger direct touch orbits. Two-finger drag is reserved for
-   * panning, pinch for zooming, and twist for view roll. */
-  if (event->type != MOUSEROTATE || (event->flag & WM_EVENT_MULTITOUCH_TWO_FINGERS)) {
+   * panning, pinch for zooming, and twist for view roll. The Pencil drives the active tool. A
+   * mouse or trackpad navigates as on the desktop. */
+  if ((event->flag & WM_EVENT_MULTITOUCH_TWO_FINGERS) || event->tablet.active != EVT_TABLET_NONE) {
     return OPERATOR_PASS_THROUGH;
   }
 #endif

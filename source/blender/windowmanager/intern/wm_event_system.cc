@@ -2508,10 +2508,11 @@ static wmKeyMapItem *wm_eventmatch_modal_keymap_items(const wmKeyMap *keymap,
   return nullptr;
 }
 
-/** A native interface may keep key presses from operators that show Blender's own interface. */
+/** A native interface may keep key presses and mouse buttons from operators that show Blender's
+ * own interface. */
 static bool wm_keymap_item_native_hidden(const wmEvent *event, const wmKeyMapItem *kmi)
 {
-  if (!ISKEYBOARD(event->type)) {
+  if (!ISKEYBOARD(event->type) && !ISMOUSE_BUTTON(event->type)) {
     return false;
   }
   const wmNativeInterface *native = WM_native_interface();

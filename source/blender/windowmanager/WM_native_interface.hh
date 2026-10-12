@@ -111,8 +111,9 @@ struct wmNativeInterface {
   /** Ensure the platform's own items in the default key configuration. */
   void (*keyconfig_default_ensure)(wmKeyConfig *keyconf) = nullptr;
   /**
-   * Whether a key press skips a key-map item: its operator would show Blender's own interface,
-   * such as a menu, pie, popup or sidebar, which the native interface shows its own way.
+   * Whether a key or mouse button skips a key-map item: its operator would show Blender's own
+   * interface, such as a menu, pie, popup or sidebar, which the native interface shows its own
+   * way.
    */
   bool (*keymap_item_hidden)(const wmKeyMapItem *kmi) = nullptr;
 };
