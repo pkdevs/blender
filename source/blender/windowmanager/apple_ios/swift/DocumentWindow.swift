@@ -295,17 +295,62 @@ public struct DocumentWindow: View {
   /** The native controls are hidden in full screen, and over Blender's own interface. */
   private var controlsShown: Bool { !model.desktop && !model.interfaceHidden }
 
+  /** The Outliner is the sidebar, which slides in and pushes the viewport over, and
+   * Properties the inspector on the other side. A phone shows both as sheets. On Apple Vision Pro
+   * they are windows of their own. */
   public var body: some View {
-    ZStack(alignment: .top) {
+#if os(visionOS)
+    editor
+#else
+    if sizeClass == .compact {
+      /* A phone: both are sheets over the viewport. */
       editor
-#if !os(visionOS) /* Windows of their own there. */
-      /* Outside the editor's navigation view, so their own navigation bars stay their own. */
-      if controlsShown {
-        SidePanelsLayer(model: model, panels: shell.panels)
-          .padding(.top, max(0, model.toolbarBottom - model.safeAreaInsets.top))
-      }
-#endif
+        .sheet(isPresented: hierarchySheet) {
+          HierarchyPanel(store: shell.panels.hierarchy) { shell.panels.setHierarchyShown(false) }
+            .environment(\.panelInWindow, true)
+            .presentationDetents([.medium, .large])
+        }
+        .sheet(isPresented: inspector) {
+          InspectorPanel(store: shell.panels.inspector) { shell.panels.setInspectorShown(false) }
+            .presentationDetents([.medium, .large])
+        }
     }
+    else {
+      splitView
+    }
+#endif
+  }
+
+#if !os(visionOS)
+  private var splitView: some View {
+    NavigationSplitView(columnVisibility: sidebar) {
+      HierarchyPanel(store: shell.panels.hierarchy) { shell.panels.setHierarchyShown(false) }
+        .environment(\.panelInWindow, true)
+        .navigationSplitViewColumnWidth(min: 260, ideal: 300, max: 400)
+        .toolbar(removing: .sidebarToggle)
+    } detail: {
+      editor
+        .inspector(isPresented: inspector) {
+          InspectorPanel(store: shell.panels.inspector) { shell.panels.setInspectorShown(false) }
+            .environment(\.panelInWindow, true)
+            .inspectorColumnWidth(min: 300, ideal: 336, max: 420)
+        }
+    }
+    .navigationSplitViewStyle(.balanced)
+  }
+#endif
+
+  private var hierarchySheet: Binding<Bool> {
+    Binding(get: { model.hierarchyShown && controlsShown }, set: { shell.panels.setHierarchyShown($0) })
+  }
+
+  private var sidebar: Binding<NavigationSplitViewVisibility> {
+    Binding(get: { model.hierarchyShown && controlsShown ? .all : .detailOnly },
+            set: { shell.panels.setHierarchyShown($0 != .detailOnly) })
+  }
+
+  private var inspector: Binding<Bool> {
+    Binding(get: { model.inspectorShown && controlsShown }, set: { shell.panels.setInspectorShown($0) })
   }
 
   /** The viewport with its controls and the toolbar. */
@@ -329,10 +374,19 @@ public struct DocumentWindow: View {
    * toolbar. */
   private var layers: some View {
     ZStack {
+      /* The sidebar and inspector are the viewport column's safe area beyond the window's own: the
+       * viewport and its controls keep beside them. */
       Color.clear
         .ignoresSafeArea()
-        .onGeometryChange(for: CGFloat.self) { $0.safeAreaInsets.top } action: { model.toolbarBottom = $0 }
+        .onGeometryChange(for: EdgeInsets.self) { $0.safeAreaInsets } action: { insets in
+          let sides = EdgeInsets(top: 0, leading: max(0, insets.leading - model.safeAreaInsets.left), bottom: 0,
+                                 trailing: max(0, insets.trailing - model.safeAreaInsets.right))
+          if model.columnInsets != sides { model.columnInsets = sides }
+        }
+      /* The layers inside keep out of the side safe areas, so they stay beside the columns. */
       viewportLayers
+        .padding(.leading, model.columnInsets.leading)
+        .padding(.trailing, model.columnInsets.trailing)
         .ignoresSafeArea()
       CompileIndicator(progress: shell.compile)
     }
@@ -341,7 +395,7 @@ public struct DocumentWindow: View {
   private var viewportLayers: some View {
     ZStack {
       ViewportView(container: viewport)
-        .ignoresSafeArea()
+        .ignoresSafeArea(edges: .vertical)
       if !model.viewportReady {
         ProgressView()
           .controlSize(.large)
@@ -360,7 +414,7 @@ public struct DocumentWindow: View {
       if let pencilMenu {
         /* Frontmost; it passes touches through while it is closed. */
         PencilMenuView(menu: pencilMenu)
-          .ignoresSafeArea()
+          .ignoresSafeArea(edges: .vertical)
       }
       if model.interfaceHidden {
         showInterfaceButton
@@ -397,42 +451,6 @@ private struct ShowInterfaceButton: View {
     .onHover { inside in withAnimation(.easeOut(duration: 0.15)) { near = inside } }
     .accessibilityLabel("Show Interface")
     .accessibilityIdentifier("blender.interface.show")
-  }
-}
-
-/** Properties and the Outliner floating over the viewport's sides, above the controls resting on
- * its bottom edge. Only one fits a narrow window. */
-struct SidePanelsLayer: View {
-  let model: ShellModel
-  let panels: SwiftScenePanels
-
-  var body: some View {
-    GeometryReader { proxy in
-      let width = min(336, max(0, proxy.size.width - 24))
-      let transition = { (edge: Edge) in
-        AnyTransition.move(edge: edge).combined(with: .opacity)
-      }
-      HStack(alignment: .top, spacing: 0) {
-        if model.hierarchyShown {
-          HierarchyPanel(store: panels.hierarchy) { panels.setHierarchyShown(false) }
-            .frame(width: width)
-            .panelGlass(in: RoundedRectangle(cornerRadius: 16, style: .continuous))
-            .accessibilityIdentifier("blender.hierarchy.panel")
-            .transition(transition(.leading))
-        }
-        Spacer(minLength: 0)
-        if model.inspectorShown {
-          InspectorPanel(store: panels.inspector) { panels.setInspectorShown(false) }
-            .frame(width: width)
-            .panelGlass(in: RoundedRectangle(cornerRadius: 16, style: .continuous))
-            .accessibilityIdentifier("blender.inspector.panel")
-            .transition(transition(.trailing))
-        }
-      }
-      .padding(12)
-      .padding(.bottom, 52 + model.bottomTray)
-      .onChange(of: proxy.size.width, initial: true) { _, width in panels.narrow = width < 700 }
-    }
   }
 }
 
@@ -483,7 +501,7 @@ struct BottomTrayLayer: View {
         trayChanged(values[0], height: values[1])
       }
     }
-    .ignoresSafeArea()
+    .ignoresSafeArea(edges: .vertical)
   }
 
   private func trayChanged(_ tray: CGFloat, height: CGFloat) {

@@ -281,7 +281,7 @@ struct ViewGizmoLayer: View {
       .onChange(of: model.navigationGizmo) { state.geometry = geometry }
       .onChange(of: model.safeAreaInsets) { state.geometry = geometry }
     }
-    .ignoresSafeArea()
+    .ignoresSafeArea(edges: .vertical)
     .animation(animation, value: state.pieVisible)
     .onReceive(NotificationCenter.default.publisher(for: UIApplication.willResignActiveNotification)) { _ in
       state.release(at: nil)

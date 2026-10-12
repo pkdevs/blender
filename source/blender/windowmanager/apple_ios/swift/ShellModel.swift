@@ -52,8 +52,8 @@ final class ShellModel {
   /** The window's safe area, without the toolbar's: controls laid out over the whole window,
    * such as the view pie, keep to it. */
   var safeAreaInsets = UIEdgeInsets.zero
-  /** The toolbar's bottom edge, below which the panels float. */
-  var toolbarBottom: CGFloat = 0
+  /** The sidebar and inspector beside the viewport. */
+  var columnInsets = EdgeInsets()
   /** The asset pane and timeline along the bottom: their height, which the controls resting on
    * the bottom edge rise above. */
   var bottomTray: CGFloat = 0

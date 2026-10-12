@@ -590,7 +590,7 @@ struct ToolRails: View {
         }
       }
     }
-    .ignoresSafeArea()
+    .ignoresSafeArea(edges: .vertical)
   }
 
   @ViewBuilder

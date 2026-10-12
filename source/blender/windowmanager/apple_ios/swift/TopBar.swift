@@ -329,6 +329,12 @@ struct DocumentToolbar: ToolbarContent {
       ToolbarSpacer(.fixed, placement: .topBarLeading)
 #endif
     }
+    if !model.compact {
+      ToolbarItem(placement: .topBarLeading) { sidebarMenu }
+#if !os(visionOS)
+      ToolbarSpacer(.fixed, placement: .topBarLeading)
+#endif
+    }
     ToolbarItemGroup(placement: .topBarLeading) {
       modeMenu
       Button("Add", systemImage: "plus") { shell.assets.toggle() }
@@ -375,17 +381,6 @@ struct DocumentToolbar: ToolbarContent {
   @ToolbarContentBuilder
   private var regularTrailing: some ToolbarContent {
     ToolbarItem(placement: .principal) { centerSettings }
-    ToolbarItemGroup(placement: .topBarTrailing) {
-      panelToggle("Outliner", image: BlenderIcon.image("OUTLINER"), isOn: model.hierarchyShown,
-                  identifier: "blender.hierarchy") { shell.panels.toggleHierarchy() }
-      panelToggle("Timeline", image: UIImage(named: "blender.time")?.withRenderingMode(.alwaysTemplate),
-                  isOn: model.timelineShown, identifier: "blender.timeline") { shell.timeline.toggle() }
-      panelToggle("Properties", image: BlenderIcon.image("PROPERTIES"), isOn: model.inspectorShown,
-                  identifier: "blender.inspector") { shell.panels.toggleInspector() }
-    }
-#if !os(visionOS)
-    ToolbarSpacer(.fixed, placement: .topBarTrailing)
-#endif
     ToolbarItem(placement: .topBarTrailing) { shadingButton }
 #if !os(visionOS)
     ToolbarSpacer(.fixed, placement: .topBarTrailing)
@@ -399,6 +394,32 @@ struct DocumentToolbar: ToolbarContent {
       Menu("More", systemImage: "ellipsis") { moreMenu }
         .accessibilityIdentifier("blender.actions")
     }
+#if !os(visionOS)
+    ToolbarSpacer(.fixed, placement: .topBarTrailing)
+#endif
+    /* Properties slides in from the window's trailing edge. */
+    ToolbarItem(placement: .topBarTrailing) {
+      panelToggle("Properties", image: BlenderIcon.image("PROPERTIES"), isOn: model.inspectorShown,
+                  identifier: "blender.inspector") { shell.panels.toggleInspector() }
+    }
+  }
+
+  /** The sidebar: a tap shows or hides the Outliner beside the viewport, and its
+   * menu chooses what else shows. */
+  private var sidebarMenu: some View {
+    Menu {
+      Toggle("Outliner", systemImage: "list.bullet.indent", isOn: Binding(
+        get: { model.hierarchyShown }, set: { _ in shell.panels.toggleHierarchy() }))
+      Toggle("Timeline", systemImage: "timeline.selection", isOn: Binding(
+        get: { model.timelineShown }, set: { _ in shell.timeline.toggle() }))
+      Toggle("Asset Browser", systemImage: "square.grid.2x2", isOn: Binding(
+        get: { model.assetsShown }, set: { _ in shell.assets.toggle() }))
+    } label: {
+      Label("Sidebar", systemImage: "sidebar.leading")
+    } primaryAction: {
+      shell.panels.toggleHierarchy()
+    }
+    .accessibilityIdentifier("blender.sidebar")
   }
 
   /** More: smaller things, with viewport options showing their current state. */
