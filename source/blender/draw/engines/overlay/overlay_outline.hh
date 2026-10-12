@@ -31,6 +31,14 @@ class Outline : Overlay {
   PassMain::Sub *prepass_mesh_ps_ = nullptr;
   PassMain::Sub *prepass_volume_ps_ = nullptr;
   PassMain::Sub *prepass_wire_ps_ = nullptr;
+  /* The object a Pencil hovers, drawn apart: each half sets its own `is_hovered`, which would
+   * otherwise carry over to the objects drawn after it. */
+  PassMain::Sub *hover_curves_ps_ = nullptr;
+  PassMain::Sub *hover_pointcloud_ps_ = nullptr;
+  PassMain::Sub *hover_gpencil_ps_ = nullptr;
+  PassMain::Sub *hover_mesh_ps_ = nullptr;
+  PassMain::Sub *hover_volume_ps_ = nullptr;
+  PassMain::Sub *hover_wire_ps_ = nullptr;
   /* Detect edges inside the ID pass and output color for each of them. */
   PassSimple outline_resolve_ps_ = {"Resolve"};
 
@@ -44,6 +52,16 @@ class Outline : Overlay {
   PassMain outline_prepass_flat_ps_ = {"PrepassFlat"};
 
  public:
+  /** Split \a pass into the objects drawn as usual, returned, and the hovered one. */
+  static PassMain::Sub &hover_split(PassMain::Sub &pass, PassMain::Sub *&r_hovered)
+  {
+    PassMain::Sub &normal = pass.sub("Default");
+    normal.push_constant("is_hovered", false);
+    r_hovered = &pass.sub("PencilHover");
+    r_hovered->push_constant("is_hovered", true);
+    return normal;
+  }
+
   void begin_sync(Resources &res, const State &state) final
   {
     enabled_ = !res.is_selection();
@@ -74,43 +92,37 @@ class Outline : Overlay {
         auto &sub = pass.sub("Curves");
         sub.shader_set(res.shaders->outline_prepass_curves.get());
         sub.push_constant("is_transform", is_transform);
-        sub.push_constant("is_hovered", false);
-        prepass_curves_ps_ = &sub;
+        prepass_curves_ps_ = &hover_split(sub, hover_curves_ps_);
       }
       {
         auto &sub = pass.sub("PointCloud");
         sub.shader_set(res.shaders->outline_prepass_pointcloud.get());
         sub.push_constant("is_transform", is_transform);
-        sub.push_constant("is_hovered", false);
-        prepass_pointcloud_ps_ = &sub;
+        prepass_pointcloud_ps_ = &hover_split(sub, hover_pointcloud_ps_);
       }
       {
         auto &sub = pass.sub("GreasePencil");
         sub.shader_set(res.shaders->outline_prepass_gpencil.get());
         sub.push_constant("is_transform", is_transform);
-        sub.push_constant("is_hovered", false);
-        prepass_gpencil_ps_ = &sub;
+        prepass_gpencil_ps_ = &hover_split(sub, hover_gpencil_ps_);
       }
       {
         auto &sub = pass.sub("Mesh");
         sub.shader_set(res.shaders->outline_prepass_mesh.get());
         sub.push_constant("is_transform", is_transform);
-        sub.push_constant("is_hovered", false);
-        prepass_mesh_ps_ = &sub;
+        prepass_mesh_ps_ = &hover_split(sub, hover_mesh_ps_);
       }
       {
         auto &sub = pass.sub("Volume");
         sub.shader_set(res.shaders->outline_prepass_mesh.get());
         sub.push_constant("is_transform", is_transform);
-        sub.push_constant("is_hovered", false);
-        prepass_volume_ps_ = &sub;
+        prepass_volume_ps_ = &hover_split(sub, hover_volume_ps_);
       }
       {
         auto &sub = pass.sub("Wire");
         sub.shader_set(res.shaders->outline_prepass_wire.get());
         sub.push_constant("is_transform", is_transform);
-        sub.push_constant("is_hovered", false);
-        prepass_wire_ps_ = &sub;
+        prepass_wire_ps_ = &hover_split(sub, hover_wire_ps_);
       }
     }
     {
@@ -153,13 +165,8 @@ class Outline : Overlay {
     if (!hovered && !(state.v3d_flag & V3D_SELECT_OUTLINE)) {
       return;
     }
-    auto hover_pass = [&](PassMain::Sub *pass) -> PassMain::Sub & {
-      if (!hovered) {
-        return *pass;
-      }
-      auto &sub = pass->sub("PencilHover");
-      sub.push_constant("is_hovered", true);
-      return sub;
+    auto hover_pass = [&](PassMain::Sub *pass, PassMain::Sub *hover) -> PassMain::Sub & {
+      return hovered ? *hover : *pass;
     };
     gpu::Batch *geom;
     switch (ob_ref.object->type) {
@@ -167,14 +174,14 @@ class Outline : Overlay {
         const char *error = nullptr;
         /* The error string will always have been printed by the engine already.
          * No need to display it twice. */
-        auto &pass = hover_pass(prepass_curves_ps_);
+        auto &pass = hover_pass(prepass_curves_ps_, hover_curves_ps_);
         geom = curves_sub_pass_setup(pass, state.scene, ob_ref.object, error);
         pass.draw(geom, manager.unique_handle(ob_ref));
         break;
       }
       case OB_GREASE_PENCIL:
         GreasePencil::draw_grease_pencil(res,
-                                         hover_pass(prepass_gpencil_ps_),
+                                         hover_pass(prepass_gpencil_ps_, hover_gpencil_ps_),
                                          state.scene,
                                          ob_ref.object,
                                          manager.unique_handle(ob_ref));
@@ -182,12 +189,12 @@ class Outline : Overlay {
       case OB_MESH:
         if (state.xray_enabled_and_not_wire) {
           geom = DRW_cache_mesh_edge_detection_get(ob_ref.object, nullptr);
-          hover_pass(prepass_wire_ps_)
+          hover_pass(prepass_wire_ps_, hover_wire_ps_)
               .draw_expand(geom, GPU_PRIM_LINES, 1, 1, manager.unique_handle(ob_ref));
         }
         else {
           geom = DRW_cache_mesh_surface_get(ob_ref.object);
-          hover_pass(prepass_mesh_ps_).draw(geom, manager.unique_handle(ob_ref));
+          hover_pass(prepass_mesh_ps_, hover_mesh_ps_).draw(geom, manager.unique_handle(ob_ref));
 
           /* Display flat object as a line when view is orthogonal to them.
            * This fixes only the biggest case which is a plane in ortho view. */
@@ -202,7 +209,7 @@ class Outline : Overlay {
         /* Looks bad in wireframe mode. Could be relaxed if we draw a wireframe of some sort in
          * the future. */
         if (!state.is_wireframe_mode) {
-          auto &pass = hover_pass(prepass_pointcloud_ps_);
+          auto &pass = hover_pass(prepass_pointcloud_ps_, hover_pointcloud_ps_);
           geom = pointcloud_sub_pass_setup(pass, ob_ref.object);
           pass.draw(geom, manager.unique_handle(ob_ref));
         }
@@ -211,7 +218,8 @@ class Outline : Overlay {
         geom = DRW_cache_volume_selection_surface_get(ob_ref.object);
         /* TODO(fclem): Get rid of these check and enforce correct API on the batch cache. */
         if (geom) {
-          hover_pass(prepass_volume_ps_).draw(geom, manager.unique_handle(ob_ref));
+          hover_pass(prepass_volume_ps_, hover_volume_ps_)
+              .draw(geom, manager.unique_handle(ob_ref));
         }
         break;
       default:
