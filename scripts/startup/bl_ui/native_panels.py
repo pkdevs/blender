@@ -407,37 +407,17 @@ def _draw_mirror(layout, context):
     obj = context.object
     if obj is None:
         return
-    if mode in {'EDIT_MESH', 'PAINT_WEIGHT', 'SCULPT', 'PAINT_VERTEX', 'PAINT_TEXTURE'}:
+    # Edit Mode and Pose Mode have Mirror with the transform settings, at the top.
+    if mode in {'PAINT_WEIGHT', 'SCULPT', 'PAINT_VERTEX', 'PAINT_TEXTURE'}:
         owner, props = obj, ("use_mesh_mirror_x", "use_mesh_mirror_y", "use_mesh_mirror_z")
     elif mode == 'SCULPT_CURVES':
         owner, props = obj.data, ("use_mirror_x", "use_mirror_y", "use_mirror_z")
-    elif mode == 'EDIT_ARMATURE':
-        owner, props = obj.data, ("use_mirror_x",)
-    elif mode == 'POSE':
-        owner, props = obj.pose, ("use_mirror_x",)
     else:
         return
     row = layout.row(align=True)
     row.label(text="Mirror")
     for prop in props:
         row.prop(owner, prop, text=prop[-1].upper(), toggle=True)
-
-
-class VIEW3D_PT_native_mode_settings(bpy.types.Panel):
-    """Settings of modes without brushes, such as Edit Mode, for the native iPadOS top bar."""
-    bl_space_type = 'VIEW_3D'
-    bl_region_type = 'UI'
-    bl_category = "Tool"
-    bl_label = "Mode"
-
-    @classmethod
-    def poll(cls, context):
-        region = context.region
-        return (region is not None and region.type == 'WINDOW' and context.object is not None and
-                context.mode in {'EDIT_MESH', 'EDIT_ARMATURE', 'POSE'})
-
-    def draw(self, context):
-        _draw_mirror(self.layout, context)
 
 
 def _unified_owner(settings, brush, name):
@@ -536,5 +516,4 @@ classes = (
     WM_OT_native_panel_edit,
     VIEW3D_PT_native_sculpt_settings,
     VIEW3D_PT_native_brush_settings,
-    VIEW3D_PT_native_mode_settings,
 )

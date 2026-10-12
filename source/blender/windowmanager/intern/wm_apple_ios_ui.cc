@@ -728,7 +728,47 @@ const char *ios_proportional_id(const ToolSettings *settings, const eContextObje
   return "on";
 }
 
-std::string ios_transform_settings_json(const Scene *scene, const eContextObjectMode mode)
+/** The mode's mirror options, as its header's Mirror popover shows them. */
+struct IOSMirror {
+  /** What has the axes, named `prefix` and the axis: `use_mesh_mirror_x`. */
+  PointerRNA axes;
+  const char *prefix;
+  /** The axes there are. */
+  const char *letters;
+  /** The mesh, for Topology Mirror, in Edit Mode only. */
+  std::optional<PointerRNA> topology;
+};
+
+static std::optional<IOSMirror> ios_mirror(Object *ob, const eContextObjectMode mode)
+{
+  if (ob == nullptr || ob->data == nullptr) {
+    return std::nullopt;
+  }
+  switch (mode) {
+    case CTX_MODE_EDIT_MESH:
+      return IOSMirror{RNA_id_pointer_create(&ob->id),
+                       "use_mesh_mirror_",
+                       "xyz",
+                       RNA_id_pointer_create(static_cast<ID *>(ob->data))};
+    case CTX_MODE_EDIT_ARMATURE:
+      return IOSMirror{
+          RNA_id_pointer_create(static_cast<ID *>(ob->data)), "use_mirror_", "x", std::nullopt};
+    case CTX_MODE_POSE:
+      if (ob->pose == nullptr) {
+        return std::nullopt;
+      }
+      return IOSMirror{RNA_pointer_create_discrete(&ob->id, RNA_Pose, ob->pose),
+                       "use_mirror_",
+                       "x",
+                       std::nullopt};
+    default:
+      return std::nullopt;
+  }
+}
+
+std::string ios_transform_settings_json(const Scene *scene,
+                                        Object *ob,
+                                        const eContextObjectMode mode)
 {
   if (!scene || !scene->toolsettings) {
     return "{}";
@@ -744,7 +784,25 @@ std::string ios_transform_settings_json(const Scene *scene, const eContextObject
   json += ios_snap_id(settings);
   json += "\",\"proportional\":\"";
   json += ios_proportional_id(settings, mode);
-  json += "\"}";
+  json += "\"";
+  if (std::optional<IOSMirror> mirror = ios_mirror(ob, mode)) {
+    /* The axes there are, and which of them mirror. */
+    json += ",\"mirror_axes\":\"";
+    json += mirror->letters;
+    json += "\",\"mirror\":\"";
+    for (const char *axis = mirror->letters; *axis; axis++) {
+      if (RNA_boolean_get(&mirror->axes, (std::string(mirror->prefix) + *axis).c_str())) {
+        json += *axis;
+      }
+    }
+    json += "\"";
+    if (mirror->topology) {
+      json += ",\"mirror_topology\":\"";
+      json += RNA_boolean_get(&*mirror->topology, "use_mirror_topology") ? "on" : "off";
+      json += "\"";
+    }
+  }
+  json += "}";
   return json;
 }
 
@@ -1027,6 +1085,32 @@ void ios_setting_execute(bContext *C, const IOSSettingCommand &command)
     }
     ios_rna_undo_push(
         C, ios_rna_boolean_set(C, tool_settings_ptr, "use_snap", command.value != "off"));
+    return;
+  }
+
+  if (command.setting == "mirror" || command.setting == "mirror_topology") {
+    /* An axis, as the letter, or Topology Mirror: each a toggle, as in the Mirror popover. */
+    std::optional<IOSMirror> mirror = ios_mirror(CTX_data_active_object(C), CTX_data_mode_enum(C));
+    if (!mirror) {
+      return;
+    }
+    if (command.setting == "mirror_topology") {
+      if (mirror->topology) {
+        PointerRNA &mesh = *mirror->topology;
+        ios_rna_undo_push(
+            C,
+            ios_rna_boolean_set(
+                C, mesh, "use_mirror_topology", !RNA_boolean_get(&mesh, "use_mirror_topology")));
+      }
+      return;
+    }
+    if (command.value.size() == 1 && strchr(mirror->letters, command.value[0])) {
+      const std::string name = mirror->prefix + command.value;
+      ios_rna_undo_push(
+          C,
+          ios_rna_boolean_set(
+              C, mirror->axes, name.c_str(), !RNA_boolean_get(&mirror->axes, name.c_str())));
+    }
     return;
   }
 
@@ -2040,7 +2124,8 @@ std::string ios_toolbar_build_json_for_context(bContext *C)
                                                                       C, mode, active_tool_id) :
                                                                   std::vector<IOSActionItem>();
   const bool can_undo = has_view3d_context && ios_undo_available(C);
-  const std::string settings_json = ios_transform_settings_json(scene, mode);
+  const std::string settings_json = ios_transform_settings_json(
+      scene, CTX_data_active_object(C), mode);
   const std::string tool_settings_json = has_view3d_context ? ui::native_properties_query(
                                                                   C, "{\"tab\":\"TOOL\"}", false) :
                                                               "{}";

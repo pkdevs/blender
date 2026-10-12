@@ -389,6 +389,11 @@ struct DocumentToolbar: ToolbarContent {
             }
           }
         }
+        if hasMirror {
+          Menu { mirrorToggles } label: {
+            Label { Text("Mirror") } icon: { iconImage(BlenderIcon.image("MOD_MIRROR")) }
+          }
+        }
       }
       else if model.toolSettingsShown {
         Button("Tool Settings", systemImage: "slider.horizontal.3") { model.toolSettingsOpen = true }
@@ -495,6 +500,25 @@ struct DocumentToolbar: ToolbarContent {
     }
   }
 
+  /** The mode's mirror axes, as Blender's header has them in a popover; none outside modes that
+   * mirror. */
+  private var hasMirror: Bool { !(model.transformSettings["mirror_axes"] ?? "").isEmpty }
+
+  @ViewBuilder
+  private var mirrorToggles: some View {
+    let on = model.transformSettings["mirror"] ?? ""
+    ForEach(Array(model.transformSettings["mirror_axes"] ?? ""), id: \.self) { axis in
+      Toggle(axis.uppercased(), isOn: Binding(get: { on.contains(axis) },
+                                             set: { _ in Engine.setting("mirror", String(axis)) }))
+    }
+    if let topology = model.transformSettings["mirror_topology"] {
+      Section {
+        Toggle("Topology Mirror", isOn: Binding(get: { topology == "on" },
+                                               set: { _ in Engine.setting("mirror_topology", "") }))
+      }
+    }
+  }
+
   private var transformSettings: some View {
     HStack(spacing: 0) {
       ForEach(TransformSetting.all, id: \.key) { setting in
@@ -519,6 +543,15 @@ struct DocumentToolbar: ToolbarContent {
         .accessibilityValue(selected?.title ?? (setting.key == "orientation" && value == "custom" ?
                                                   "Custom Orientation" : "Multiple or Other Elements"))
         .accessibilityIdentifier("blender.setting.\(setting.title)")
+      }
+      if hasMirror {
+        Menu { mirrorToggles } label: {
+          iconImage(BlenderIcon.image("MOD_MIRROR"))
+            .frame(width: 44, height: 44)
+        }
+        .accessibilityLabel("Mirror")
+        .accessibilityValue((model.transformSettings["mirror"] ?? "").uppercased())
+        .accessibilityIdentifier("blender.setting.Mirror")
       }
     }
     .padding(.horizontal, 4)
