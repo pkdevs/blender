@@ -42,7 +42,6 @@ inline void execute_element_fn_as_multi_function(const ElementFn &element_fn,
       exec_preset,
       mask,
       TypeSequence<ParamTags...>(),
-      std::index_sequence<I...>(),
       [&]() -> decltype(auto) {
         /* Use `typedef` instead of `using` to work around a compiler bug. */
         using ParamTag = ParamTags;
@@ -59,6 +58,21 @@ inline void execute_element_fn_as_multi_function(const ElementFn &element_fn,
       }()...);
 }
 
+template<typename ElementFn, typename ExecPreset, typename... ParamTags>
+inline void execute_element_fn_as_multi_function(const ElementFn &element_fn,
+                                                 const ExecPreset exec_preset,
+                                                 const IndexMask &mask,
+                                                 Params params,
+                                                 TypeSequence<ParamTags...> param_tags)
+{
+  execute_element_fn_as_multi_function(element_fn,
+                                       exec_preset,
+                                       mask,
+                                       params,
+                                       param_tags,
+                                       std::index_sequence_for<ParamTags...>());
+}
+
 /**
  * `element_fn` is expected to return nothing and to have the following parameters:
  * - For single-inputs: const value or reference.
@@ -72,12 +86,8 @@ inline auto build_multi_function_call_from_element_fn(ElementFn &&element_fn,
 {
   return [element_fn = std::forward<ElementFn>(element_fn), exec_preset](const IndexMask &mask,
                                                                          Params params) {
-    execute_element_fn_as_multi_function(element_fn,
-                                         exec_preset,
-                                         mask,
-                                         params,
-                                         TypeSequence<ParamTags...>(),
-                                         std::make_index_sequence<sizeof...(ParamTags)>());
+    execute_element_fn_as_multi_function(
+        element_fn, exec_preset, mask, params, TypeSequence<ParamTags...>());
   };
 }
 

@@ -503,6 +503,21 @@ inline void execute_element_fn_with_params(ElementFn &&element_fn,
   }
 }
 
+template<typename ElementFn, ExecPresetC ExecPreset, typename... ParamTags, typename... Params>
+inline void execute_element_fn_with_params(ElementFn &&element_fn,
+                                           const ExecPreset &exec_preset,
+                                           const IndexMask &mask,
+                                           TypeSequence<ParamTags...> param_tags,
+                                           Params &&...params)
+{
+  execute_element_fn_with_params(std::forward<ElementFn>(element_fn),
+                                 exec_preset,
+                                 mask,
+                                 param_tags,
+                                 std::index_sequence_for<ParamTags...>(),
+                                 std::forward<Params>(params)...);
+}
+
 template<typename ElementFn, ExecPresetC ExecPreset, typename Out, typename... In>
 inline void batch_process__n_in__1_out(const IndexMask &mask,
                                        const ExecPreset &exec_preset,
@@ -517,7 +532,6 @@ inline void batch_process__n_in__1_out(const IndexMask &mask,
       exec_preset,
       mask,
       param_tags,
-      std::make_index_sequence<param_tags.size()>(),
       in_params...,
       out_param);
 }
