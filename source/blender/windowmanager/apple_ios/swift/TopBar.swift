@@ -100,6 +100,76 @@ final class ShellCommands {
     return UIMenu(children: [section([create]), viewport, section([hide, desktop]), section([settings])])
   }
 
+  /** A narrow window's one menu: the panels, the view, One Finger, the selection mode and tool
+   * settings, then Share and More. */
+  func compactMenu() -> UIMenu {
+    func toggle(_ title: String, _ image: UIImage?, _ on: Bool, _ action: @escaping () -> Void) -> UIAction {
+      let toggle = UIAction(title: title, image: image) { _ in action() }
+      toggle.state = on ? .on : .off
+      return toggle
+    }
+    let panels = [
+      toggle("Outliner", BlenderIcon.image("OUTLINER"), model.hierarchyShown) { [overlay] in
+        overlay.panels.toggleHierarchy()
+      },
+      toggle("Timeline", UIImage(named: "blender.time")?.withRenderingMode(.alwaysTemplate), model.timelineShown) {
+        [overlay] in overlay.timeline.toggle(nil)
+      },
+      toggle("Properties", BlenderIcon.image("PROPERTIES"), model.inspectorShown) { [overlay] in
+        overlay.panels.toggleInspector()
+      },
+    ]
+    let shading = UIAction(title: "Viewport Shading", image: UIImage(systemName: "circle.lefthalf.filled")) {
+      [model] _ in model.shadingOpen = true
+    }
+    let view = UIMenu(title: "View", image: UIImage(systemName: "eye"), children: ViewCommand.pie.map { command in
+      UIAction(title: command.title, image: command.image) { _ in command.run() }
+    })
+    let finger = UIMenu(title: "One Finger", image: UIImage(systemName: "hand.point.up"), children: [
+      toggle("Use Tool", wm_apple_ios_icon("control.finger_tool", "cursorarrow"), model.fingerUsesTool) {
+        [weak self] in self?.setFingerUsesTool(true)
+      },
+      toggle("Orbit View", wm_apple_ios_icon("operator.VIEW3D_OT_rotate", "rotate.3d"), !model.fingerUsesTool) {
+        [weak self] in self?.setFingerUsesTool(false)
+      },
+    ])
+    var editing: [UIMenuElement] = []
+    if model.mode == "mesh_edit" {
+      let modes = [("VERT", "Vertex Select", "circle.fill"), ("EDGE", "Edge Select", "line.diagonal"),
+                   ("FACE", "Face Select", "square.fill")]
+      editing.append(UIMenu(title: "Select Mode", image: wm_apple_ios_icon("mesh.VERT", "circle.fill"),
+                            children: modes.map { value, title, symbol in
+        toggle(title, wm_apple_ios_icon("mesh.\(value)", symbol), model.meshSelectMode == value) {
+          Engine.setting("mesh_select_mode", value)
+        }
+      }))
+    }
+    if transformTools.contains(model.activeTool) {
+      editing += TransformSetting.all.map { setting in
+        UIMenu(title: setting.title, image: wm_apple_ios_icon("control.\(setting.title)", setting.symbol),
+               children: setting.options.map { option in
+          toggle(option.title, setting.image(option), model.transformSettings[setting.key] == option.value) {
+            Engine.setting(setting.key, option.value)
+          }
+        })
+      }
+    }
+    else if model.toolSettingsShown {
+      editing.append(UIAction(title: "Tool Settings", image: UIImage(systemName: "slider.horizontal.3")) {
+        [model] _ in model.toolSettingsOpen = true
+      })
+    }
+    let share = UIMenu(title: "Share", image: UIImage(systemName: "square.and.arrow.up"),
+                       children: shareMenu().children)
+    return UIMenu(children: [section(panels), section([shading, view, finger]), section(editing),
+                             section([share])] + moreMenu().children)
+  }
+
+  func setFingerUsesTool(_ useTool: Bool) {
+    model.fingerUsesTool = useTool
+    wm_apple_ios_window_set_finger_tool(model.window, useTool)
+  }
+
   func setInterfaceHidden(_ hidden: Bool) {
     withAnimation(UIAccessibility.isReduceMotionEnabled ? nil : .easeInOut(duration: 0.25)) {
       model.interfaceHidden = hidden
@@ -229,11 +299,9 @@ private func iconImage(_ image: UIImage?) -> Image {
 }
 
 struct DocumentToolbar: ToolbarContent {
-  let model: ShellModel
+  @Bindable var model: ShellModel
   let overlay: ShellOverlay
   let commands: ShellCommands
-  @Binding var shadingShown: Bool
-  @Binding var toolSettingsShown: Bool
   @Binding var stripWidth: CGFloat
 
   var body: some ToolbarContent {
@@ -253,7 +321,7 @@ struct DocumentToolbar: ToolbarContent {
       Button("Add", systemImage: "plus") { overlay.assets.toggle(nil) }
         .accessibilityIdentifier("blender.assets")
     }
-    if model.mode == "mesh_edit" {
+    if model.mode == "mesh_edit" && !model.compact {
 #if os(visionOS)
       ToolbarItem(placement: .topBarLeading) { meshSelection }
 #else
@@ -272,6 +340,27 @@ struct DocumentToolbar: ToolbarContent {
         .disabled(!model.canUndo)
         .accessibilityIdentifier("blender.undo")
     }
+    if model.compact {
+      /* Everything else in one menu, as nothing else fits beside the most used items. */
+      ToolbarItem(placement: .topBarTrailing) {
+        UIMenuButton(title: nil, image: UIImage(systemName: "ellipsis"), style: .plain,
+                     accessibilityLabel: "More", tint: .label, deferred: false) { commands.compactMenu() }
+          .frame(width: 44, height: 44)
+          .background(ShareSource(commands: commands))
+          .shadingPopover(model: model, overlay: overlay)
+          .popover(isPresented: $model.toolSettingsOpen) {
+            overlay.panels.toolSettingsContent { model.toolSettingsOpen = false }
+          }
+          .accessibilityIdentifier("blender.actions")
+      }
+    }
+    else {
+      regularTrailing
+    }
+  }
+
+  @ToolbarContentBuilder
+  private var regularTrailing: some ToolbarContent {
     ToolbarItem(placement: .principal) { centerSettings }
     ToolbarItemGroup(placement: .topBarTrailing) {
       panelToggle("Outliner", image: BlenderIcon.image("OUTLINER"), isOn: model.hierarchyShown,
@@ -408,15 +497,15 @@ struct DocumentToolbar: ToolbarContent {
       .scrollBounceBehavior(.basedOnSize, axes: .horizontal)
       .frame(width: max(1, overflow ? room - 36 : stripWidth))
       if overflow {
-        Button("More Tool Settings", systemImage: "ellipsis") { toolSettingsShown = true }
+        Button("More Tool Settings", systemImage: "ellipsis") { model.toolSettingsOpen = true }
           .labelStyle(.iconOnly)
           .foregroundStyle(PanelStyle.tint)
           .frame(width: 32)
           .accessibilityIdentifier("blender.tool-settings.more")
       }
     }
-    .popover(isPresented: $toolSettingsShown) {
-      overlay.panels.toolSettingsContent { toolSettingsShown = false }
+    .popover(isPresented: $model.toolSettingsOpen) {
+      overlay.panels.toolSettingsContent { model.toolSettingsOpen = false }
     }
     .tint(PanelStyle.tint)
     .padding(.horizontal, 12)
@@ -446,16 +535,24 @@ struct DocumentToolbar: ToolbarContent {
     ]
     let current = commands[model.shading] ?? commands["solid"]!
     return Button {
-      shadingShown = true
+      model.shadingOpen = true
     } label: {
       Label { Text("Viewport Shading") } icon: { iconImage(wm_apple_ios_command_icon(current.0, current.2)) }
     }
     .accessibilityValue(current.1)
     .accessibilityIdentifier("blender.shading")
-    .popover(isPresented: $shadingShown) {
-      overlay.panels.shadingContent { shadingShown = false }
+    .shadingPopover(model: model, overlay: overlay)
+  }
+}
+
+extension View {
+  /** Viewport shading's popover; Blender sends its settings while it is open. */
+  func shadingPopover(model: ShellModel, overlay: ShellOverlay) -> some View {
+    @Bindable var model = model
+    return popover(isPresented: $model.shadingOpen) {
+      overlay.panels.shadingContent { model.shadingOpen = false }
     }
-    .onChange(of: shadingShown) { _, shown in overlay.panels.setShadingShown(shown) }
+    .onChange(of: model.shadingOpen) { _, shown in overlay.panels.setShadingShown(shown) }
   }
 }
 

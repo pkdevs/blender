@@ -320,7 +320,9 @@ public final class SwiftScenePanels: NSObject, UIPopoverPresentationControllerDe
         .navigationBarTitleDisplayMode(.inline)
         .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done", action: done) } }
     }
-    .frame(width: 400, height: 640)
+    /* A popover's size; a sheet on a phone, which it fills. */
+    .frame(idealWidth: 400, idealHeight: 640)
+    .presentationDetents([.medium, .large])
   }
 
   func setShadingShown(_ shown: Bool) {
@@ -401,7 +403,9 @@ public final class SwiftScenePanels: NSObject, UIPopoverPresentationControllerDe
         .navigationBarTitleDisplayMode(.inline)
         .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done", action: done) } }
     }
-    .frame(width: 320, height: 420)
+    /* A popover's size; a sheet on a phone, which it fills. */
+    .frame(idealWidth: 320, idealHeight: 420)
+    .presentationDetents([.medium, .large])
   }
 
   private func ensureToolGroup() -> UIBarButtonItemGroup {

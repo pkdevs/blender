@@ -59,9 +59,8 @@ public final class DocumentController: UIHostingController<DocumentWindow> {
     commands.presenter = self
     commands.render = SwiftRender(presenter: self)
     commands.settings = SwiftSettings(presenter: self)
-    commands.settings?.fingerUsesToolChanged = { [weak self] useTool in
-      guard let self else { return }
-      wm_apple_ios_window_set_finger_tool(self.model.window, useTool)
+    commands.settings?.fingerUsesToolChanged = { [weak commands] useTool in
+      commands?.setFingerUsesTool(useTool)
     }
     model.onRender = { [weak commands] status in commands?.render?.updateStatus(status) }
     model.onPreferences = { [weak commands] preferences in commands?.settings?.updatePreferences(preferences) }
@@ -159,10 +158,11 @@ public final class DocumentController: UIHostingController<DocumentWindow> {
 
   override public func viewDidLayoutSubviews() {
     super.viewDidLayoutSubviews()
-    if !touchSettingsApplied, view.window != nil, UIDevice.current.userInterfaceIdiom != .phone {
-      /* The iPad's saved Pencil and touch choice; the phone has its own and uses the tool. */
+    if !touchSettingsApplied, view.window != nil {
+      /* The iPad's saved Pencil and touch choice; a phone has no Pencil, so its finger starts
+       * with the tool. */
       touchSettingsApplied = true
-      wm_apple_ios_window_set_finger_tool(model.window, SwiftSettings.fingerUsesTool)
+      commands.setFingerUsesTool(UIDevice.current.userInterfaceIdiom == .phone || SwiftSettings.fingerUsesTool)
     }
   }
 
@@ -292,59 +292,63 @@ public struct DocumentWindow: View {
   let overlay: ShellOverlay
   let commands: ShellCommands
   let pencilMenu: PencilMenu?
-  @State private var shadingShown = false
-  @State private var toolSettingsShown = false
   @State private var stripWidth: CGFloat = 0
+  @Environment(\.horizontalSizeClass) private var sizeClass
 
   /** The native controls are hidden in full screen, and over Blender's own interface. */
   private var controlsShown: Bool { !model.desktop && !model.interfaceHidden }
 
   public var body: some View {
     NavigationStack {
-      ZStack {
-        ViewportView(container: viewport)
-          .ignoresSafeArea()
-        if !model.viewportReady {
-          ProgressView()
-            .controlSize(.large)
-            .accessibilityLabel("Loading Viewport")
-            .accessibilityIdentifier("blender.viewport.loading")
-            .allowsHitTesting(false)
+      layers
+        .onGeometryChange(for: CGFloat.self) { $0.frame(in: .global).minY } action: { top in
+          if model.contentTop != top {
+            model.contentTop = top
+            overlay.setNeedsLayout()
+          }
         }
-        if controlsShown {
-          QuickActionsRow(model: model)
-          ToolRails(model: model)
-          ViewGizmoLayer(model: model)
+        .toolbar {
+          /* Kept while the bar is hidden: items added again lose the bar's centering of the strip. */
+          DocumentToolbar(model: model, overlay: overlay, commands: commands, stripWidth: $stripWidth)
+        }
+        .toolbar(controlsShown ? .visible : .hidden, for: .navigationBar)
+        .toolbarTitleDisplayMode(.inline)
+        .onChange(of: sizeClass, initial: true) { _, size in model.compact = size == .compact }
+    }
+  }
+
+  /** The viewport, the controls over it and the panels, back to front. */
+  private var layers: some View {
+    ZStack {
+      ViewportView(container: viewport)
+        .ignoresSafeArea()
+      if !model.viewportReady {
+        ProgressView()
+          .controlSize(.large)
+          .accessibilityLabel("Loading Viewport")
+          .accessibilityIdentifier("blender.viewport.loading")
+          .allowsHitTesting(false)
+      }
+      if controlsShown {
+        QuickActionsRow(model: model)
+        ToolRails(model: model)
+        ViewGizmoLayer(model: model)
 #if !os(visionOS) /* A window of its own there. */
-          TimelineLayer(model: model, store: overlay.timeline.store)
+        TimelineLayer(model: model, store: overlay.timeline.store)
 #endif
-        }
-        ShellOverlayView(overlay: overlay)
+      }
+      ShellOverlayView(overlay: overlay)
+        .ignoresSafeArea()
+        .opacity(controlsShown ? 1 : 0)
+        .allowsHitTesting(controlsShown)
+      if let pencilMenu {
+        /* Frontmost; it passes touches through while it is closed. */
+        PencilMenuView(menu: pencilMenu)
           .ignoresSafeArea()
-          .opacity(controlsShown ? 1 : 0)
-          .allowsHitTesting(controlsShown)
-        if let pencilMenu {
-          /* Frontmost; it passes touches through while it is closed. */
-          PencilMenuView(menu: pencilMenu)
-            .ignoresSafeArea()
-        }
-        if model.interfaceHidden {
-          showInterfaceButton
-        }
       }
-      .onGeometryChange(for: CGFloat.self) { $0.frame(in: .global).minY } action: { top in
-        if model.contentTop != top {
-          model.contentTop = top
-          overlay.setNeedsLayout()
-        }
+      if model.interfaceHidden {
+        showInterfaceButton
       }
-      .toolbar {
-        /* Kept while the bar is hidden: items added again lose the bar's centering of the strip. */
-        DocumentToolbar(model: model, overlay: overlay, commands: commands, shadingShown: $shadingShown,
-                        toolSettingsShown: $toolSettingsShown, stripWidth: $stripWidth)
-      }
-      .toolbar(controlsShown ? .visible : .hidden, for: .navigationBar)
-      .toolbarTitleDisplayMode(.inline)
     }
   }
 

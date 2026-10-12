@@ -70,6 +70,14 @@ final class ShellModel {
   var toolRailWidth: CGFloat = 64
   /** The room the toolbar leaves for the tool settings strip between its other items. */
   var toolStripRoom: CGFloat = 320
+  /** A narrow window, such as a phone's: the toolbar keeps its most used items and puts the rest
+   * in one menu. */
+  var compact = false
+  /** The viewport shading and tool settings popovers are open. */
+  var shadingOpen = false
+  var toolSettingsOpen = false
+  /** One finger uses the active tool rather than orbiting the view. */
+  var fingerUsesTool = false
 
   /** Parts of the snapshot that other objects show: the render sheet, settings and tool settings,
    * which says whether the tool has any. */
