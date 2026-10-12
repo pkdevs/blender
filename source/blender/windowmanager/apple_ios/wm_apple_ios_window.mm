@@ -5,11 +5,40 @@
 /** \file
  * \ingroup wm
  *
- * Blender's window for the SwiftUI document window, `swift/DocumentWindow.swift`: GHOST's window
- * functions with C names, which Swift can call.
+ * Blender's window: its controller, the SwiftUI document window in `swift/DocumentWindow.swift`,
+ * and GHOST's window functions with C names, which Swift can call.
  */
 
-#import "wm_apple_ios_view_controller.hh"
+#import "wm_apple_ios_interface.hh"
+
+/** Blender's main window, shown over the launcher while a document is open. */
+static UIViewController<WMIOSDocumentController> *document_controller = nil;
+
+namespace blender {
+
+void WM_apple_ios_document_window_changed()
+{
+  [document_controller updateDocumentControls];
+}
+
+void *WM_apple_ios_window_controller(void *metal_view, GHOST_WindowIOS *window, void **r_root)
+{
+  UIViewController<WMIOSDocumentController> *controller = [[blenderIOSSwiftClass(
+      @"WMIOSSwiftDocumentController") alloc] initWithMetalView:(MTKView *)metal_view
+                                                         window:window];
+  document_controller = controller;
+  *r_root = controller;
+  return controller;
+}
+
+}  // namespace blender
+
+extern "C" void wm_apple_ios_document_controller_closed(id controller)
+{
+  if (document_controller == controller) {
+    document_controller = nil;
+  }
+}
 
 static GHOST_WindowIOS *ghost_window(void *window)
 {

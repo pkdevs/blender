@@ -195,28 +195,17 @@ if(WITH_APPLE_CROSSPLATFORM)
     apple_ios/wm_apple_ios_file_drop.mm
     apple_ios/wm_apple_ios_interface.mm
     apple_ios/wm_apple_ios_launcher.mm
-    apple_ios/wm_apple_ios_view_controller.mm
-    apple_ios/wm_apple_ios_view_controller_actions.mm
-    apple_ios/wm_apple_ios_view_controller_brushes.mm
-    apple_ios/wm_apple_ios_view_controller_tools.mm
-    apple_ios/wm_apple_ios_view_controller_top_bar.mm
-    apple_ios/wm_apple_ios_view_controller_view_gizmo.mm
     apple_ios/wm_apple_ios_window.mm
 
     apple_ios/wm_apple_ios_alerts.hh
-    apple_ios/wm_apple_ios_assets.hh
     apple_ios/wm_apple_ios_blend_document.hh
     apple_ios/wm_apple_ios_compile_indicator.hh
     apple_ios/wm_apple_ios_file_drop.hh
     apple_ios/wm_apple_ios_icons.hh
+    apple_ios/wm_apple_ios_interface.hh
     apple_ios/wm_apple_ios_launcher.hh
     apple_ios/wm_apple_ios_platform.hh
-    apple_ios/wm_apple_ios_redo_strip.hh
-    apple_ios/wm_apple_ios_render.hh
-    apple_ios/wm_apple_ios_scene_panels.hh
     apple_ios/wm_apple_ios_swift_bridge.h
-    apple_ios/wm_apple_ios_timeline.hh
-    apple_ios/wm_apple_ios_view_controller.hh
   )
 endif()
 

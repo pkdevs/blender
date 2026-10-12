@@ -29,32 +29,6 @@ static inline UIVisualEffect *WMIOSGlassEffect(BOOL clear, BOOL interactive)
 #endif
 }
 
-/** A glass button; visionOS draws bordered and filled buttons on glass itself. */
-static inline UIButtonConfiguration *WMIOSGlassButtonConfiguration(BOOL prominent)
-{
-#if defined(APPLE_TARGET_VISIONOS)
-  return prominent ? [UIButtonConfiguration filledButtonConfiguration] :
-                     [UIButtonConfiguration borderedButtonConfiguration];
-#else
-  return prominent ? [UIButtonConfiguration prominentGlassButtonConfiguration] :
-                     [UIButtonConfiguration glassButtonConfiguration];
-#endif
-}
-
-/** Pixels per point of the display, or of `view` once it is in a window. */
-static inline CGFloat WMIOSDisplayScale(UIView *view)
-{
-  if (view.window) {
-    return view.traitCollection.displayScale > 0.0 ? view.traitCollection.displayScale : 2.0;
-  }
-#if defined(APPLE_TARGET_VISIONOS)
-  return 2.0;
-#else
-  return UIScreen.mainScreen.nativeScale > 0.0 ? UIScreen.mainScreen.nativeScale :
-                                                 UIScreen.mainScreen.scale;
-#endif
-}
-
 /** Feel that something could not be done; visionOS has no haptics. */
 static inline void WMIOSNotifyError()
 {

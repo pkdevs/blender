@@ -364,8 +364,8 @@ else()
 
     # The document launcher's Suzanne and logo are drawn with RealityKit and SwiftUI, which only
     # Swift can use. The rest of the launcher finds these views by name, see
-    # `wm_apple_ios_launcher.mm`. The native panels are SwiftUI too, found by name in
-    # `wm_apple_ios_view_controller.mm`.
+    # `wm_apple_ios_launcher.mm`. The document window is SwiftUI too, found by name in
+    # `wm_apple_ios_window.mm`.
     set(CMAKE_Swift_LANGUAGE_VERSION 5)
     enable_language(Swift)
     set(IOS_LAUNCHER_SWIFT
@@ -375,7 +375,6 @@ else()
       ${CMAKE_SOURCE_DIR}/source/blender/windowmanager/apple_ios/swift/CompositeControls.swift
       ${CMAKE_SOURCE_DIR}/source/blender/windowmanager/apple_ios/swift/DocumentWindow.swift
       ${CMAKE_SOURCE_DIR}/source/blender/windowmanager/apple_ios/swift/DialogSheet.swift
-      ${CMAKE_SOURCE_DIR}/source/blender/windowmanager/apple_ios/swift/GlassButton.swift
       ${CMAKE_SOURCE_DIR}/source/blender/windowmanager/apple_ios/swift/HierarchyView.swift
       ${CMAKE_SOURCE_DIR}/source/blender/windowmanager/apple_ios/swift/InspectorStore.swift
       ${CMAKE_SOURCE_DIR}/source/blender/windowmanager/apple_ios/swift/InspectorView.swift
@@ -395,7 +394,6 @@ else()
       ${CMAKE_SOURCE_DIR}/source/blender/windowmanager/apple_ios/swift/TopBar.swift
       ${CMAKE_SOURCE_DIR}/source/blender/windowmanager/apple_ios/swift/UIKitInterop.swift
       ${CMAKE_SOURCE_DIR}/source/blender/windowmanager/apple_ios/swift/ViewGizmo.swift
-      ${CMAKE_SOURCE_DIR}/source/blender/windowmanager/apple_ios/swift/VisionChrome.swift
       ${CMAKE_SOURCE_DIR}/source/blender/windowmanager/apple_ios/swift/VisionOrnaments.swift
     )
     set(IOS_LAUNCHER_RESOURCES
