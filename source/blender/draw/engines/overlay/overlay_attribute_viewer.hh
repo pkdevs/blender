@@ -191,24 +191,17 @@ class AttributeViewer : Overlay {
                 pointcloud.attributes().lookup_meta_data(".viewer"))
         {
           if (attribute_type_supports_viewer_overlay(meta_data->data_type)) {
-            gpu::VertBuf **pointcloud_vertbuf = DRW_pointcloud_evaluated_attribute(&pointcloud,
-                                                                                   ".viewer");
-            gpu::VertBuf **gsplat_vertbuf = DRW_gsplat_evaluated_attribute(&pointcloud, ".viewer");
+            gpu::VertBuf **vertbuf = DRW_pointcloud_evaluated_attribute(&pointcloud, ".viewer");
 
             /* Avoid trying to bind an empty `vertbuf` which causes assert / undefined behavior. */
-            ResourceHandleRange res_handle = manager.unique_handle(ob_ref);
-            if (pointcloud.totpoint > 0 && pointcloud_vertbuf != nullptr) {
-              auto &sub = *pointcloud_sub_;
+            if (pointcloud.totpoint > 0 && vertbuf != nullptr) {
+              ResourceHandleRange res_handle = manager.unique_handle(ob_ref);
+              auto &sub = pointcloud.type == PointCloudType::GSplat ? *gsplat_sub_ :
+                                                                      *pointcloud_sub_;
               gpu::Batch *batch = pointcloud_sub_pass_setup(sub, ob_ref, res_handle, nullptr);
+
               sub.push_constant("opacity", opacity);
-              sub.bind_texture("attribute_tx", pointcloud_vertbuf);
-              sub.draw(batch, res_handle);
-            }
-            if (pointcloud.totpoint > 0 && gsplat_vertbuf != nullptr) {
-              auto &sub = *gsplat_sub_;
-              gpu::Batch *batch = gsplat_sub_pass_setup(sub, ob_ref, res_handle, nullptr);
-              sub.push_constant("opacity", opacity);
-              sub.bind_texture("attribute_tx", gsplat_vertbuf);
+              sub.bind_texture("attribute_tx", vertbuf);
               sub.draw(batch, res_handle);
             }
           }
