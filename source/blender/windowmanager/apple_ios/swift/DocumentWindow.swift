@@ -314,6 +314,9 @@ public struct DocumentWindow: View {
         .toolbar(controlsShown ? .visible : .hidden, for: .navigationBar)
         .toolbarTitleDisplayMode(.inline)
         .onChange(of: sizeClass, initial: true) { _, size in model.compact = size == .compact }
+#if os(visionOS)
+        .visionOrnaments(model: model, shown: controlsShown)
+#endif
     }
   }
 
@@ -330,10 +333,13 @@ public struct DocumentWindow: View {
           .allowsHitTesting(false)
       }
       if controlsShown {
+#if os(visionOS)
+        /* The tools and actions are ornaments there, and the timeline a window of its own. */
+        ViewGizmoLayer(model: model)
+#else
         QuickActionsRow(model: model)
         ToolRails(model: model)
         ViewGizmoLayer(model: model)
-#if !os(visionOS) /* A window of its own there. */
         TimelineLayer(model: model, store: overlay.timeline.store)
 #endif
       }

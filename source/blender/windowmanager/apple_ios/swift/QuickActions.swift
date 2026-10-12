@@ -96,6 +96,8 @@ struct QuickAction: Identifiable, Equatable {
 struct QuickActionButton: View {
   let action: QuickAction
   let model: ShellModel
+  /** On glass of its own, such as an ornament's: plain unless selected. */
+  var onGlass = false
 
   var body: some View {
     Button {
@@ -116,7 +118,7 @@ struct QuickActionButton: View {
 
   private var glass: PanelGlass {
     if action.selected { return .tinted(action.axis ? action.axisColor : .blue) }
-    return .regular
+    return onGlass ? .none : .regular
   }
 
   @ViewBuilder

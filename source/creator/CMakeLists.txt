@@ -396,6 +396,7 @@ else()
       ${CMAKE_SOURCE_DIR}/source/blender/windowmanager/apple_ios/swift/UIKitInterop.swift
       ${CMAKE_SOURCE_DIR}/source/blender/windowmanager/apple_ios/swift/ViewGizmo.swift
       ${CMAKE_SOURCE_DIR}/source/blender/windowmanager/apple_ios/swift/VisionChrome.swift
+      ${CMAKE_SOURCE_DIR}/source/blender/windowmanager/apple_ios/swift/VisionOrnaments.swift
     )
     set(IOS_LAUNCHER_RESOURCES
       ${CMAKE_SOURCE_DIR}/release/ios/launcher/Suzanne.usdz
