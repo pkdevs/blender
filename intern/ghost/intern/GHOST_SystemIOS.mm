@@ -605,14 +605,44 @@ void GHOST_ios_unregister_window(UIWindow *window)
 
 @end
 
+/** Hardware keys reach the window before UIKit's key commands and text input, see
+ * #GHOSTUIWindow.handleKeyboardEvent. */
+@implementation UIWindow (GHOSTKeyboard)
+- (BOOL)handleKeyboardEvent:(UIPressesEvent *)event
+{
+  UNUSED_VARS(event);
+  return NO;
+}
+@end
+
+@interface GHOSTUIApplication : UIApplication
+@end
+
+@implementation GHOSTUIApplication
+- (void)sendEvent:(UIEvent *)event
+{
+  /* Hardware keys arrive as a private subclass with its own type, not #UIEventTypePresses. */
+  if ([event isKindOfClass:UIPressesEvent.class]) {
+    for (UIWindow *window in native_windows) {
+      if (window.isKeyWindow && [window handleKeyboardEvent:(UIPressesEvent *)event]) {
+        return;
+      }
+    }
+  }
+  [super sendEvent:event];
+}
+@end
+
 namespace blender {
 int GHOST_iosmain(int _argc, const char **_argv)
 {
   argc = _argc;
   argv = _argv;
   @autoreleasepool {
-    return UIApplicationMain(
-        _argc, (char *_Nullable *)_argv, nil, NSStringFromClass([IOSAppDelegate class]));
+    return UIApplicationMain(_argc,
+                             (char *_Nullable *)_argv,
+                             NSStringFromClass([GHOSTUIApplication class]),
+                             NSStringFromClass([IOSAppDelegate class]));
   }
 }
 
@@ -1052,9 +1082,20 @@ GHOST_TSuccess GHOST_SystemIOS::setMouseCursorPosition(int32_t /*x*/, int32_t /*
   return GHOST_kSuccess;
 }
 
-GHOST_TSuccess GHOST_SystemIOS::getModifierKeys(GHOST_ModifierKeys & /*keys*/) const
+/* Modifier keys held on a hardware keyboard, by #GHOST_TModifierKey. UIKit-only. */
+static uint32_t held_modifiers = 0;
+
+void GHOST_ios_set_modifier_held(GHOST_TModifierKey modifier, bool held)
 {
-  /* iOS Passthrough. */
+  held_modifiers = held ? (held_modifiers | (1u << modifier)) : (held_modifiers & ~(1u << modifier));
+}
+
+GHOST_TSuccess GHOST_SystemIOS::getModifierKeys(GHOST_ModifierKeys &keys) const
+{
+  const uint32_t held = held_modifiers;
+  for (int modifier = GHOST_kModifierKeyLeftShift; modifier < GHOST_kModifierKeyNum; modifier++) {
+    keys.set(GHOST_TModifierKey(modifier), held & (1u << modifier));
+  }
   return GHOST_kSuccess;
 }
 

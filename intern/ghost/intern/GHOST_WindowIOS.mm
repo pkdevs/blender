@@ -27,6 +27,66 @@ static void ios_view_roll(float angle)
   }
 }
 
+/* Hardware keys held for Blender, by HID usage: their release goes to Blender too. */
+static NSMutableDictionary<NSNumber *, NSNumber *> *held_keys = nil;
+/* The key that repeats while held, as on the desktop, and its text. */
+static CFTimeInterval key_repeat_next = 0;
+static GHOST_TKey key_repeat_key = GHOST_kKeyUnknown;
+static char key_repeat_utf8[6] = {0};
+static CADisplayLink *key_repeat_link = nil;
+/* The first responder, found by #ghost_captureFirstResponder:. */
+static UIResponder *found_first_responder = nil;
+
+@implementation UIResponder (GHOSTFirstResponder)
+- (void)ghost_captureFirstResponder:(id)sender
+{
+  UNUSED_VARS(sender);
+  found_first_responder = self;
+}
+@end
+
+static UIResponder *current_first_responder()
+{
+  found_first_responder = nil;
+  [UIApplication.sharedApplication sendAction:@selector(ghost_captureFirstResponder:)
+                                           to:nil
+                                         from:nil
+                                     forEvent:nil];
+  return found_first_responder;
+}
+
+static bool modifier_from_key(GHOST_TKey key, GHOST_TModifierKey *modifier)
+{
+  switch (key) {
+    case GHOST_kKeyLeftShift:
+      *modifier = GHOST_kModifierKeyLeftShift;
+      return true;
+    case GHOST_kKeyRightShift:
+      *modifier = GHOST_kModifierKeyRightShift;
+      return true;
+    case GHOST_kKeyLeftControl:
+      *modifier = GHOST_kModifierKeyLeftControl;
+      return true;
+    case GHOST_kKeyRightControl:
+      *modifier = GHOST_kModifierKeyRightControl;
+      return true;
+    case GHOST_kKeyLeftAlt:
+      *modifier = GHOST_kModifierKeyLeftAlt;
+      return true;
+    case GHOST_kKeyRightAlt:
+      *modifier = GHOST_kModifierKeyRightAlt;
+      return true;
+    case GHOST_kKeyLeftOS:
+      *modifier = GHOST_kModifierKeyLeftOS;
+      return true;
+    case GHOST_kKeyRightOS:
+      *modifier = GHOST_kModifierKeyRightOS;
+      return true;
+    default:
+      return false;
+  }
+}
+
 /** Blender's main window, which shows the open document over the launcher. */
 UIWindow *document_window = nil;
 
@@ -126,6 +186,7 @@ UIWindow *document_window = nil;
 @implementation GHOSTUIWindow
 - (void)detachBlender
 {
+  [self releaseKeys];
   [self cancelPencilStroke];
   [self stopOrbitMomentum];
   [self hideOnscreenKeyboard];
@@ -695,6 +756,180 @@ UIWindow *document_window = nil;
   [super sendEvent:event];
 }
 
+/* -------------------------------------------------------------------- */
+/* Hardware keyboard
+ *
+ * Keys go to Blender's keymap as on the desktop, except while text is typed into a native field
+ * or a native sheet or alert shows. Modifier keys and Escape reach UIKit too, so holding Command
+ * shows the menu bar's shortcuts; other keys don't, so UIKit's own uses of Tab, Space or arrows
+ * can't act on the interface around Blender. */
+
+- (bool)blenderTakesKeyboard
+{
+  if (!window || !system || self.hidden || !GHOST_ios_document_window_visible() ||
+      self.rootViewController.presentedViewController != nil)
+  {
+    return false;
+  }
+  UIResponder *responder = current_first_responder();
+  return ![responder conformsToProtocol:@protocol(UIKeyInput)];
+}
+
+- (void)pushKey:(GHOST_TKey)key down:(bool)down repeat:(bool)repeat utf8:(const char *)utf8
+{
+  system->pushEvent(std::make_unique<GHOST_EventKey>(system->getMilliSeconds(),
+                                                     down ? GHOST_kEventKeyDown :
+                                                            GHOST_kEventKeyUp,
+                                                     window,
+                                                     key,
+                                                     repeat,
+                                                     down ? utf8 : nullptr));
+}
+
+- (BOOL)handleKeyboardEvent:(UIPressesEvent *)event
+{
+  if (!window || !system) {
+    return NO;
+  }
+  if (!held_keys) {
+    held_keys = [[NSMutableDictionary alloc] init];
+  }
+  bool takes = false;
+  bool hide_from_uikit = false;
+  for (UIPress *press in event.allPresses) {
+    UIKey *ui_key = press.key;
+    if (!ui_key) {
+      continue;
+    }
+    NSNumber *usage = @(ui_key.keyCode);
+    const bool down = press.phase == UIPressPhaseBegan;
+    const bool up = press.phase == UIPressPhaseEnded || press.phase == UIPressPhaseCancelled;
+    if (!down && !up) {
+      continue;
+    }
+    GHOST_TKey key;
+    if (up) {
+      /* A release goes where its press went. */
+      NSNumber *held = held_keys[usage];
+      if (!held) {
+        continue;
+      }
+      key = GHOST_TKey(held.intValue);
+      [held_keys removeObjectForKey:usage];
+    }
+    else {
+      if (!takes && ![self blenderTakesKeyboard]) {
+        continue;
+      }
+      NSString *base = ui_key.charactersIgnoringModifiers;
+      key = convertKey(int(ui_key.keyCode), base.length ? [base characterAtIndex:0] : 0);
+      if (key == GHOST_kKeyUnknown) {
+        continue;
+      }
+      held_keys[usage] = @(int(key));
+    }
+    takes = true;
+
+    /* Keys go to the editor under the pointer, as on the desktop. Without a Pencil, mouse or
+     * trackpad there has been none yet: use the middle of the view, the viewport. */
+    int32_t pointer_x, pointer_y;
+    if (down && window->getPointerPosition(pointer_x, pointer_y) != GHOST_kSuccess) {
+      const CGSize size = window->getView().bounds.size;
+      CGPoint middle = CGPointMake(size.width / 2, size.height / 2);
+      middle = window->scalePointToWindow(middle);
+      UserInputEvent move(&middle, nullptr, nullptr, false);
+      move.add_event(UserInputEvent::EventTypes::CURSOR_MOVE);
+      [self generateUserInputEvents:move];
+    }
+
+    GHOST_TModifierKey modifier;
+    const bool is_modifier = modifier_from_key(key, &modifier);
+    if (is_modifier) {
+      GHOST_ios_set_modifier_held(modifier, down);
+    }
+    else if (key != GHOST_kKeyEsc) {
+      /* Escape also closes native panels, such as the Outliner, as their cancel action. */
+      hide_from_uikit = true;
+    }
+
+    /* Text as on macOS: none for commands, arrows and function keys. */
+    char utf8[6] = {0};
+    NSString *text = ui_key.characters;
+    if (down && !is_modifier && text.length &&
+        !(ui_key.modifierFlags & (UIKeyModifierCommand | UIKeyModifierControl)) &&
+        !(key >= GHOST_kKeyLeftArrow && key <= GHOST_kKeyDownArrow) &&
+        !(key >= GHOST_kKeyF1 && key <= GHOST_kKeyF24))
+    {
+      const char *bytes = text.UTF8String;
+      if (bytes && strlen(bytes) < sizeof(utf8) && uint8_t(bytes[0]) >= 0x20 && bytes[0] != 0x7f)
+      {
+        strcpy(utf8, bytes);
+      }
+    }
+    [self pushKey:key down:down repeat:false utf8:utf8];
+
+    if (down && !is_modifier) {
+      [self startKeyRepeat:key utf8:utf8];
+    }
+    else if (up && key == key_repeat_key) {
+      [self stopKeyRepeat];
+    }
+  }
+  return hide_from_uikit;
+}
+
+/** UIKit doesn't repeat hardware keys, Blender expects them to repeat as the desktop does. */
+- (void)startKeyRepeat:(GHOST_TKey)key utf8:(const char *)utf8
+{
+  key_repeat_key = key;
+  memcpy(key_repeat_utf8, utf8, sizeof(key_repeat_utf8));
+  key_repeat_next = CACurrentMediaTime() + 0.45;
+  if (!key_repeat_link) {
+    key_repeat_link = [[CADisplayLink displayLinkWithTarget:self
+                                                   selector:@selector(repeatKey:)] retain];
+    key_repeat_link.preferredFrameRateRange = CAFrameRateRangeMake(30, 60, 30);
+    [key_repeat_link addToRunLoop:NSRunLoop.mainRunLoop forMode:NSRunLoopCommonModes];
+  }
+}
+
+- (void)repeatKey:(CADisplayLink *)link
+{
+  if (!window || !system) {
+    [self stopKeyRepeat];
+    return;
+  }
+  if (link.timestamp < key_repeat_next) {
+    return;
+  }
+  key_repeat_next = link.timestamp + 1.0 / 30.0;
+  [self pushKey:key_repeat_key down:true repeat:true utf8:key_repeat_utf8];
+}
+
+- (void)stopKeyRepeat
+{
+  [key_repeat_link invalidate];
+  [key_repeat_link release];
+  key_repeat_link = nil;
+  key_repeat_key = GHOST_kKeyUnknown;
+}
+
+/** Release every held key, such as when the app leaves the foreground with keys down. */
+- (void)releaseKeys
+{
+  [self stopKeyRepeat];
+  for (NSNumber *held in held_keys.allValues) {
+    const GHOST_TKey key = GHOST_TKey(held.intValue);
+    GHOST_TModifierKey modifier;
+    if (modifier_from_key(key, &modifier)) {
+      GHOST_ios_set_modifier_held(modifier, false);
+    }
+    if (window && system) {
+      [self pushKey:key down:false repeat:false utf8:nullptr];
+    }
+  }
+  [held_keys removeAllObjects];
+}
+
 - (void)handleNavigationTap:(UITapGestureRecognizer *)gesture
 {
   if (!window || gesture.state != UIGestureRecognizerStateEnded) {
@@ -845,6 +1080,7 @@ UIWindow *document_window = nil;
 - (void)applicationWillResignActive:(NSNotification *)notification
 {
   UNUSED_VARS(notification);
+  [self releaseKeys];
   [self stopOrbitMomentum];
   [self cancelPencilStroke];
   [pencil_context_menu cancel];

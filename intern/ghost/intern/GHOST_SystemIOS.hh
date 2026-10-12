@@ -31,6 +31,11 @@ UIWindowScene *GHOST_getIOSWindowScene();
 void GHOST_ios_register_window(UIWindow *window);
 void GHOST_ios_unregister_window(UIWindow *window);
 
+@interface UIWindow (GHOSTKeyboard)
+/** Take a hardware key event for Blender, true when UIKit must not see it. */
+- (BOOL)handleKeyboardEvent:(UIPressesEvent *)event;
+@end
+
 @interface GHOST_IOSMetalRenderer : NSObject <MTKViewDelegate>
 
 - (nonnull instancetype)initWithWindow:(nonnull GHOST_WindowIOS *)window;
@@ -39,6 +44,8 @@ void GHOST_ios_unregister_window(UIWindow *window);
 @end
 #endif
 
+/** Whether a modifier key is held on a hardware keyboard, see #GHOST_SystemIOS::getModifierKeys. */
+void GHOST_ios_set_modifier_held(GHOST_TModifierKey modifier, bool held);
 /** A hardware keyboard key as a GHOST key, see `GHOST_SystemIOS.mm`. */
 GHOST_TKey convertKey(int usage, uint16_t recvChar);
 
