@@ -34,10 +34,12 @@ enum eObjectInfoFlag : uint32_t {
   OBJECT_NO_INFO = ~OBJECT_HOLDOUT
 };
 
-#define RAY_TYPE_CAMERA 0
-#define RAY_TYPE_SHADOW 1
-#define RAY_TYPE_DIFFUSE 2
-#define RAY_TYPE_GLOSSY 3
+enum RayPipelineType : uint32_t {
+  RAY_TYPE_CAMERA,
+  RAY_TYPE_SHADOW,
+  RAY_TYPE_DIFFUSE,
+  RAY_TYPE_GLOSSY,
+};
 
 /* Expected members of ViewMatrices. */
 struct ViewMatrices {
@@ -134,83 +136,103 @@ Closure closure_mix(Closure /*cl1*/, Closure /*cl2*/, float /*fac*/)
 {
   return {};
 }
-Closure closure_eval(ShadingData & /*sd*/, ClosureDiffuse /*diffuse*/)
+Closure closure_eval(KernelGlobals & /*kg*/, ShadingData & /*sd*/, ClosureDiffuse /*diffuse*/)
 {
   return {};
 }
-Closure closure_eval(ShadingData & /*sd*/, ClosureSubsurface /*diffuse*/)
+Closure closure_eval(KernelGlobals & /*kg*/, ShadingData & /*sd*/, ClosureSubsurface /*diffuse*/)
 {
   return {};
 }
-Closure closure_eval(ShadingData & /*sd*/, ClosureTranslucent /*translucent*/)
+Closure closure_eval(KernelGlobals & /*kg*/,
+                     ShadingData & /*sd*/,
+                     ClosureTranslucent /*translucent*/)
 {
   return {};
 }
-Closure closure_eval(ShadingData & /*sd*/, ClosureReflection /*reflection*/)
+Closure closure_eval(KernelGlobals & /*kg*/,
+                     ShadingData & /*sd*/,
+                     ClosureReflection /*reflection*/)
 {
   return {};
 }
-Closure closure_eval(ShadingData & /*sd*/, ClosureRefraction /*refraction*/)
+Closure closure_eval(KernelGlobals & /*kg*/,
+                     ShadingData & /*sd*/,
+                     ClosureRefraction /*refraction*/)
 {
   return {};
 }
-Closure closure_eval(ShadingData & /*sd*/, ClosureThinRefraction /*refraction*/)
+Closure closure_eval(KernelGlobals & /*kg*/,
+                     ShadingData & /*sd*/,
+                     ClosureThinRefraction /*refraction*/)
 {
   return {};
 }
-Closure closure_eval(ShadingData & /*sd*/, ClosureEmission /*emission*/)
+Closure closure_eval(KernelGlobals & /*kg*/, ShadingData & /*sd*/, ClosureEmission /*emission*/)
 {
   return {};
 }
-Closure closure_eval(ShadingData & /*sd*/, ClosureTransparency /*transparency*/)
+Closure closure_eval(KernelGlobals & /*kg*/,
+                     ShadingData & /*sd*/,
+                     ClosureTransparency /*transparency*/)
 {
   return {};
 }
-Closure closure_eval(ShadingData & /*sd*/, ClosureVolumeScatter /*volume_scatter*/)
+Closure closure_eval(KernelGlobals & /*kg*/,
+                     ShadingData & /*sd*/,
+                     ClosureVolumeScatter /*volume_scatter*/)
 {
   return {};
 }
-Closure closure_eval(ShadingData & /*sd*/, ClosureVolumeAbsorption /*volume_absorption*/)
+Closure closure_eval(KernelGlobals & /*kg*/,
+                     ShadingData & /*sd*/,
+                     ClosureVolumeAbsorption /*volume_absorption*/)
 {
   return {};
 }
-Closure closure_eval(ShadingData & /*sd*/, ClosureHair /*hair*/)
+Closure closure_eval(KernelGlobals & /*kg*/, ShadingData & /*sd*/, ClosureHair /*hair*/)
 {
   return {};
 }
-Closure closure_eval(ShadingData & /*sd*/,
+Closure closure_eval(KernelGlobals & /*kg*/,
+                     ShadingData & /*sd*/,
                      ClosureReflection /*reflection*/,
                      ClosureRefraction /*refraction*/)
 {
   return {};
 }
-Closure closure_eval(ShadingData & /*sd*/,
+Closure closure_eval(KernelGlobals & /*kg*/,
+                     ShadingData & /*sd*/,
                      ClosureDiffuse /*diffuse*/,
                      ClosureReflection /*reflection*/)
 {
   return {};
 }
-Closure closure_eval(ShadingData & /*sd*/,
+Closure closure_eval(KernelGlobals & /*kg*/,
+                     ShadingData & /*sd*/,
                      ClosureReflection /*reflection*/,
                      ClosureReflection /*coat*/)
 {
   return {};
 }
-Closure closure_eval(ShadingData & /*sd*/,
+Closure closure_eval(KernelGlobals & /*kg*/,
+                     ShadingData & /*sd*/,
                      ClosureVolumeScatter /*volume_scatter*/,
                      ClosureVolumeAbsorption /*volume_absorption*/,
                      ClosureEmission /*emission*/)
 {
   return {};
 }
-Closure closure_eval(ShadingData & /*sd*/,
+Closure closure_eval(KernelGlobals & /*kg*/,
+                     ShadingData & /*sd*/,
                      ClosureDiffuse /*diffuse*/,
                      ClosureReflection /*reflection*/,
                      ClosureReflection /*coat*/)
 {
   return {};
 }
-Closure closure_eval(ShadingData & /*sd*/,
+Closure closure_eval(KernelGlobals & /*kg*/,
+                     ShadingData & /*sd*/,
                      ClosureDiffuse /*diffuse*/,
                      ClosureReflection /*reflection*/,
                      ClosureReflection /*coat*/,
@@ -219,9 +241,7 @@ Closure closure_eval(ShadingData & /*sd*/,
   return {};
 }
 
-float4 closure_to_rgba([[resource_table]] KernelGlobals & /*kg*/,
-                       ShadingData & /*sd*/,
-                       Closure /*closure*/)
+float4 closure_to_rgba(KernelGlobals & /*kg*/, ShadingData & /*sd*/, Closure /*closure*/)
 {
   return float4(0);
 }
@@ -236,7 +256,7 @@ template<typename T> float3 F_brdf_multi_scatter(float3 /*f0*/, float3 /*f90*/, 
   return float3(0);
 }
 
-void brdf_f82_tint_lut([[resource_table]] const KernelGlobals & /*kg*/,
+void brdf_f82_tint_lut(const KernelGlobals & /*kg*/,
                        float3 /*F0*/,
                        float3 /*F82*/,
                        float /*cos_theta*/,
@@ -246,7 +266,7 @@ void brdf_f82_tint_lut([[resource_table]] const KernelGlobals & /*kg*/,
 {
 }
 
-void bsdf_lut([[resource_table]] const KernelGlobals & /*kg*/,
+void bsdf_lut(const KernelGlobals & /*kg*/,
               float3 /*F0*/,
               float3 /*F90*/,
               float3 /*transmission_tint*/,
@@ -259,7 +279,7 @@ void bsdf_lut([[resource_table]] const KernelGlobals & /*kg*/,
 {
 }
 
-float2 bsdf_lut([[resource_table]] const KernelGlobals & /*kg*/,
+float2 bsdf_lut(const KernelGlobals & /*kg*/,
                 float /*cos_theta*/,
                 float /*roughness*/,
                 float /*ior*/,
@@ -268,7 +288,7 @@ float2 bsdf_lut([[resource_table]] const KernelGlobals & /*kg*/,
   return float2(0);
 }
 
-float3 brdf_lut([[resource_table]] KernelGlobals & /*kg*/,
+float3 brdf_lut(KernelGlobals & /*kg*/,
                 float3 /*F0*/,
                 float3 /*F90*/,
                 float /*cos_theta*/,
@@ -297,7 +317,7 @@ struct Coordinates {
   float3 incoming;
 };
 
-Coordinates coordinate_impl([[resource_table]] KernelGlobals & /*kg*/,
+Coordinates coordinate_impl(KernelGlobals & /*kg*/,
                             const ShadingData & /*sd*/,
                             float3 /*P*/,
                             float3 /*N*/)
@@ -307,7 +327,7 @@ Coordinates coordinate_impl([[resource_table]] KernelGlobals & /*kg*/,
 
 /* Ambient occlusion node. */
 
-float ambient_occlusion_eval([[resource_table]] const KernelGlobals & /*kg*/,
+float ambient_occlusion_eval(const KernelGlobals & /*kg*/,
                              const ShadingData & /*sd*/,
                              float3 /*normal*/,
                              float /*max_distance*/,
@@ -319,75 +339,59 @@ float ambient_occlusion_eval([[resource_table]] const KernelGlobals & /*kg*/,
 
 /* Attribute node occlusion node. */
 
-float4 attr_load_color_post(float4 attr)
+float4 attr_load_color_post(KernelGlobals & /*kg*/, float4 attr)
 {
   return attr;
 }
-float attr_load_temperature_post(float attr)
-{
-  return attr;
-}
-float4 attr_load_radiance_post(float4 attr)
+float attr_load_temperature_post(KernelGlobals & /*kg*/, float attr)
 {
   return attr;
 }
 
 /* TODO remove attr as parameter. */
-float4 attr_load_uniform([[resource_table]] KernelGlobals & /*kg*/,
+float4 attr_load_uniform(KernelGlobals & /*kg*/,
                          const ShadingData & /*sd*/,
                          float4 /*attr*/,
                          uint /*attr_hash*/)
 {
   return float4(0);
 }
-float4 node_attribute_layer_impl([[resource_table]] KernelGlobals & /*kg*/,
-                                 const uint /*attr_hash*/)
+float4 node_attribute_layer_impl(KernelGlobals & /*kg*/, const uint /*attr_hash*/)
 {
   return float4(0);
 }
-float4 node_attribute_light_impl([[resource_table]] KernelGlobals & /*kg*/,
-                                 int /*light_index*/,
-                                 uint /*attr_hash*/)
+float4 node_attribute_light_impl(KernelGlobals & /*kg*/, int /*light_index*/, uint /*attr_hash*/)
 {
   return float4(0);
 }
-bool node_attribute_light_is_sun_impl([[resource_table]] KernelGlobals & /*kg*/,
-                                      int /*light_index*/)
+bool node_attribute_light_is_sun_impl(KernelGlobals & /*kg*/, int /*light_index*/)
 {
   return false;
 }
-bool node_attribute_light_is_point_impl([[resource_table]] KernelGlobals & /*kg*/,
-                                        int /*light_index*/)
+bool node_attribute_light_is_point_impl(KernelGlobals & /*kg*/, int /*light_index*/)
 {
   return false;
 }
-bool node_attribute_light_is_spot_impl([[resource_table]] KernelGlobals & /*kg*/,
-                                       int /*light_index*/)
+bool node_attribute_light_is_spot_impl(KernelGlobals & /*kg*/, int /*light_index*/)
 {
   return false;
 }
-bool node_attribute_light_is_area_impl([[resource_table]] KernelGlobals & /*kg*/,
-                                       int /*light_index*/)
+bool node_attribute_light_is_area_impl(KernelGlobals & /*kg*/, int /*light_index*/)
 {
   return false;
 }
-float node_attribute_light_cutoff_distance_impl([[resource_table]] KernelGlobals & /*kg*/,
-                                                int /*light_index*/)
+float node_attribute_light_cutoff_distance_impl(KernelGlobals & /*kg*/, int /*light_index*/)
 {
   return float(0);
 }
 
 /* Scene Time Node. */
 
-void scene_time_uniforms([[resource_table]] KernelGlobals & /*kg*/,
-                         float & /*seconds*/,
-                         float & /*frame*/)
-{
-}
+void scene_time_uniforms(KernelGlobals & /*kg*/, float & /*seconds*/, float & /*frame*/) {}
 
-/* Shadow Raycast Node. */
+/* Shadow Ray-cast Node. */
 
-void node_shadow_raycast_impl([[resource_table]] KernelGlobals & /*kg*/,
+void node_shadow_raycast_impl(KernelGlobals & /*kg*/,
                               const ShadingData & /*sd*/,
                               int /*light_index*/,
                               float3 /*position*/,
@@ -398,7 +402,7 @@ void node_shadow_raycast_impl([[resource_table]] KernelGlobals & /*kg*/,
 
 /* Light Accumulation Node. */
 
-void node_light_accumulation_impl([[resource_table]] KernelGlobals & /*kg*/,
+void node_light_accumulation_impl(KernelGlobals & /*kg*/,
                                   ShadingData & /*sd*/,
                                   int /*light_index*/,
                                   float3 /*diffuse_light*/,
@@ -414,7 +418,7 @@ void node_light_accumulation_impl([[resource_table]] KernelGlobals & /*kg*/,
 
 /* Light Info Node. */
 
-void node_light_info_impl([[resource_table]] KernelGlobals & /*kg*/,
+void node_light_info_impl(KernelGlobals & /*kg*/,
                           const int /*light_index*/,
                           float4 & /*color*/,
                           float & /*power*/,
@@ -424,7 +428,7 @@ void node_light_info_impl([[resource_table]] KernelGlobals & /*kg*/,
 
 /* Light Evaluation Node. */
 
-void node_light_evaluation_common_impl([[resource_table]] KernelGlobals & /*kg*/,
+void node_light_evaluation_common_impl(KernelGlobals & /*kg*/,
                                        int /*light_index*/,
                                        float3 /*position*/,
                                        float3 & /*direction*/,
@@ -434,7 +438,7 @@ void node_light_evaluation_common_impl([[resource_table]] KernelGlobals & /*kg*/
 }
 
 template<bool use_diffuse>
-void node_light_evaluation_impl([[resource_table]] KernelGlobals & /*kg*/,
+void node_light_evaluation_impl(KernelGlobals & /*kg*/,
                                 const ShadingData & /*sd*/,
                                 int /*light_index*/,
                                 float3 /*position*/,
@@ -449,9 +453,9 @@ template void node_light_evaluation_impl<true>(
 template void node_light_evaluation_impl<false>(
     KernelGlobals &, const ShadingData &, int, float3, float3, float, float &);
 
-/* Raycast Node. */
+/* Ray-cast Node. */
 
-void raycast_eval([[resource_table]] KernelGlobals & /*kg*/,
+void raycast_eval(KernelGlobals & /*kg*/,
                   const ShadingData & /*sd*/,
                   float3 /*position*/,
                   float3 /*direction*/,
@@ -467,19 +471,19 @@ void raycast_eval([[resource_table]] KernelGlobals & /*kg*/,
 
 /* Image Texture Node. */
 
-float texture_lod_bias_get([[resource_table]] KernelGlobals & /*kg*/)
+float texture_lod_bias_get(KernelGlobals & /*kg*/)
 {
   return 0.0;
 }
 
-float derivative_scale_get([[resource_table]] KernelGlobals & /*kg*/)
+float derivative_scale_get(KernelGlobals & /*kg*/)
 {
   return 1.0;
 }
 
 /* AOV Output. */
 
-void output_aov([[resource_table]] KernelGlobals & /* kg */,
+void output_aov(KernelGlobals & /* kg */,
                 int2 /*texel*/,
                 float4 /*color*/,
                 float /*value*/,
