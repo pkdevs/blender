@@ -393,9 +393,9 @@ template<typename T> float3 average_light_dir(const T &lut)
   constexpr float3 N = float3(0.0f, 0.0f, 1.0f);
 
   float3 average_dir = float3(0.0f);
-  constexpr uint sample_count = 50u * 50u;
+  constexpr float sample_count = float(50u * 50u);
 
-  for (uint i = 1u; i <= sample_count; i++) {
+  for (float i = 0.5f; i < sample_count; i++) {
     /* Warp sequence to a point on the unit cylinder. */
     const float3 rand = sample_cylinder(random::hammersley_2d(i, sample_count));
     const float3 L = lut.closure.bsdf_sample(rand, lut.V).direction;
@@ -413,256 +413,282 @@ template<typename T> float3 average_light_dir(const T &lut)
 template float3 average_light_dir<GGXBrdfClosure>(const GGXBrdfClosure &);
 template float3 average_light_dir<OrenNayarClosure>(const OrenNayarClosure &);
 
-struct FitLTC {
-  LtcData ltc;
+struct LTCFitter {
+  /* Parametric representation. */
+  float m11, m22, m13, m23;
+  float3 X, Y, Z;
+
+  /* Matrix Representation. */
+  float3x3 M;
+  float3x3 invM;
+  float detM;
+
   bool isotropic;
 
-  static FitLTC init(LtcData &ltc_, bool isotropic_)
+  float4 pack() const
   {
-    return {.ltc = ltc_, .isotropic = isotropic_};
+    return float4(m11, m22, m13, m23);
+  }
+
+  float4 pack_inverse() const
+  {
+    return ltc::pack_isotropic_matrix(invM);
+  }
+
+  /* Compute matrix from parameters. */
+  void update()
+  {
+    M = float3x3(X, Y, Z) * float3x3(m11, 0, 0, 0, m22, 0, m13, m23, 1);
+    invM = inverse(M);
+    detM = abs(determinant(M));
   }
 
   void update(const float4 params)
   {
     constexpr float MIN_ALPHA = 0.0001f;
-    float m11 = max(params.x, MIN_ALPHA);
-    float m22 = max(params.y, MIN_ALPHA);
-    float m13 = params.z;
-    float m23 = params.w;
 
+    m11 = max(params.x, MIN_ALPHA);
     if (isotropic) {
-      ltc.m11 = m11;
-      ltc.m22 = m11;
-      ltc.m13 = 0.0f;
-      ltc.m23 = 0.0f;
+      m22 = m11;
+      m13 = 0.0f;
+      m23 = 0.0f;
     }
     else {
-      ltc.m11 = m11;
-      ltc.m22 = m22;
-      ltc.m13 = m13;
-      ltc.m23 = m23;
+      m22 = max(params.y, MIN_ALPHA);
+      m13 = params.z;
+      m23 = params.w;
     }
-    ltc.update();
+
+    update();
+  }
+
+  BsdfEval eval(const float3 &L) const
+  {
+    const float3 Loriginal = normalize(invM * L);
+    const float3 L_ = M * Loriginal;
+
+    const float l = length(L_);
+    const float Jacobian = detM / (l * l * l);
+
+    const float D = M_1_PI * max(0.0f, Loriginal.z);
+
+    const float throughput = D / Jacobian;
+
+    return {.throughput = throughput, .pdf = throughput, .weight = 1.0f};
+  }
+
+  float3 sample_light(const float2 rand) const
+  {
+    return normalize(M * sample_cos_hemisphere(rand));
   }
 };
 
-template<typename LUT> float error_(const FitLTC &fitter, const LUT &lut, const float3 L)
+template<typename BSDF> LTCFitter init_ltc_fit(const BSDF &bsdf)
+{
+  LTCFitter fitter;
+  /* Initialize with diffuse. */
+  /* NOTE: this works well with diffuse BSDFs such as Oren Nayar and Sheen. For GGX we will need
+   * better initial guesses. */
+  fitter.m13 = fitter.m23 = 0.0f;
+  fitter.m11 = fitter.m22 = 1.0f;
+
+  fitter.isotropic = (bsdf.V.z == 1.0f);
+
+  const float3 L = fitter.isotropic ? float3(0.0f, 0.0f, 1.0f) : average_light_dir(bsdf);
+  fitter.X = float3(L.z, 0, -L.x);
+  fitter.Y = float3(0.0f, 1.0f, 0.0f);
+  fitter.Z = L;
+
+  fitter.update();
+
+  return fitter;
+}
+template LTCFitter init_ltc_fit<OrenNayarClosure>(const OrenNayarClosure &);
+template LTCFitter init_ltc_fit<GGXBrdfClosure>(const GGXBrdfClosure &);
+
+template<typename BSDF> float error_(const LTCFitter &fitter, const BSDF &bsdf, const float3 L)
 {
   /* Geometric normal. */
   constexpr float3 N = float3(0.0f, 0.0f, 1.0f);
 
-  const BsdfEval eval_closure = lut.closure.bsdf_eval(N, L, lut.V);
-  const BsdfEval eval_ltc = fitter.ltc.eval(L);
+  const BsdfEval eval_closure = bsdf.closure.bsdf_eval(N, L, bsdf.V);
+  const BsdfEval eval_ltc = fitter.eval(L);
   const float error = abs(eval_closure.throughput - eval_ltc.throughput);
 
   /* L3 error with MIS weight. */
   return (error * error * error) / (eval_ltc.pdf + eval_closure.pdf);
 }
 
-template float error_<GGXBrdfClosure>(const FitLTC &, const GGXBrdfClosure &, const float3);
-template float error_<OrenNayarClosure>(const FitLTC &, const OrenNayarClosure &, const float3);
+template float error_<GGXBrdfClosure>(const LTCFitter &, const GGXBrdfClosure &, const float3);
+template float error_<OrenNayarClosure>(const LTCFitter &, const OrenNayarClosure &, const float3);
 
-template<typename LUT> float compute_error(FitLTC &fitter, const float4 params, const LUT &lut)
+template<typename BSDF>
+float compute_error(LTCFitter &fitter, const float4 params, const BSDF &bsdf)
 {
   fitter.update(params);
 
-  float error = 0.0f;
-  constexpr int Nsample = 50;
+  KahanSum sum = {};
+  constexpr float sample_count = float(50u * 50u);
 
   /* Importance sample LTC. */
-  for (int j = 0; j < Nsample; ++j) {
-    for (int i = 0; i < Nsample; ++i) {
-      const float U1 = (i + 0.5f) / float(Nsample);
-      const float U2 = (j + 0.5f) / float(Nsample);
-
-      const float3 L = fitter.ltc.sample_light(U1, U2);
-      error += error_(fitter, lut, L);
-    }
+  for (float i = 0.5f; i < sample_count; i++) {
+    const float2 rand = random::hammersley_2d(i, sample_count);
+    const float3 L = fitter.sample_light(rand);
+    sum.add(error_(fitter, bsdf, L));
   }
 
-  constexpr uint sample_count = uint(Nsample * Nsample);
   /* Importance sample BRDF. */
-  for (uint i = 1u; i <= sample_count; i++) {
+  for (float i = 0.5f; i < sample_count; i++) {
     const float3 rand = sample_cylinder(random::hammersley_2d(i, sample_count));
-    const float3 L = lut.closure.bsdf_sample(rand, lut.V).direction;
-    error += error_(fitter, lut, L);
+    const float3 L = bsdf.closure.bsdf_sample(rand, bsdf.V).direction;
+    sum.add(error_(fitter, bsdf, L));
   }
 
-  return error / float(Nsample * Nsample);
+  return sum.sum / sample_count;
 }
 
-template float compute_error<GGXBrdfClosure>(FitLTC &, const float4, const GGXBrdfClosure &);
-template float compute_error<OrenNayarClosure>(FitLTC &, const float4, const OrenNayarClosure &);
+template float compute_error<GGXBrdfClosure>(LTCFitter &, const float4, const GGXBrdfClosure &);
+template float compute_error<OrenNayarClosure>(LTCFitter &,
+                                               const float4,
+                                               const OrenNayarClosure &);
 
-// Downhill simplex solver:
-// http://en.wikipedia.org/wiki/Nelder%E2%80%93Mead_method#One_possible_variation_of_the_NM_algorithm
-// using the termination criterion from Numerical Recipes in C++ (3rd Ed.)
-template<typename Closure>
-float NelderMead(float4 &pmin,
+/* Downhill simplex solver:
+ * http://en.wikipedia.org/wiki/Nelder%E2%80%93Mead_method#One_possible_variation_of_the_NM_algorithm
+ * using the termination criterion from Numerical Recipes in C++ (3rd Ed.). */
+template<typename Destination>
+float NelderMead(float4 &result,
                  const float4 start,
-                 float delta,
-                 float tolerance,
-                 int maxIters,
-                 FitLTC objectiveFn,
-                 const Closure &closure)
+                 const float delta,
+                 const float tolerance,
+                 const int max_iters,
+                 LTCFitter objective_fn,
+                 const Destination &dest)
 {
+  /* Standard coefficients from Nelder-Mead. */
+  constexpr float reflect = 1.0f;
+  constexpr float expand = 2.0f;
+  constexpr float contract = 0.5f;
+  constexpr float shrink = 0.5f;
+
   constexpr int DIM = 4;
-  // standard coefficients from Nelder-Mead
-  const float reflect = 1.0f;
-  const float expand = 2.0f;
-  const float contract = 0.5f;
-  const float shrink = 0.5f;
+  constexpr int NUM_POINTS = DIM + 1;
 
-  constexpr int NB_POINTS = DIM + 1;
+  float4 s[NUM_POINTS];
+  float error[NUM_POINTS];
 
-  float4 s[NB_POINTS];
-  float f[NB_POINTS];
-
-  // initialise simplex
+  /* Initialize simplex. */
   s[0] = start;
-  for (int i = 1; i < NB_POINTS; i++) {
+  for (int i = 1; i < NUM_POINTS; i++) {
     s[i] = start;
     s[i][i - 1] += delta;
   }
 
-  // evaluate function at each point on simplex
-  for (int i = 0; i < NB_POINTS; i++) {
-    f[i] = compute_error(objectiveFn, s[i], closure);
+  /* Evaluate function at each point on simplex. */
+  for (int i = 0; i < NUM_POINTS; i++) {
+    error[i] = compute_error(objective_fn, s[i], dest);
   }
 
   int lo = 0, hi, nh;
 
-  for (int j = 0; j < maxIters; j++) {
-    // find lowest, highest and next highest
+  for (int j = 0; j < max_iters; j++) {
+    /* Find lowest, highest and next highest. */
     lo = hi = nh = 0;
-    for (int i = 1; i < NB_POINTS; i++) {
-      if (f[i] < f[lo]) {
+    for (int i = 1; i < NUM_POINTS; i++) {
+      if (error[i] < error[lo]) {
         lo = i;
       }
-      if (f[i] > f[hi]) {
+      if (error[i] > error[hi]) {
         nh = hi;
         hi = i;
       }
-      else if (f[i] > f[nh]) {
+      else if (error[i] > error[nh]) {
         nh = i;
       }
     }
 
-    // stop if we've reached the required tolerance level
-    float a = abs(f[lo]);
-    float b = abs(f[hi]);
+    /* Stop if we've reached the required tolerance level. */
+    const float a = abs(error[lo]);
+    const float b = abs(error[hi]);
     if (2.0f * abs(a - b) < (a + b) * tolerance) {
       break;
     }
 
-    // compute centroid (excluding the worst point)
+    /* Compute centroid (excluding the worst point). */
     float4 o = float4(0.0f);
-    for (int i = 0; i < NB_POINTS; i++) {
+    for (int i = 0; i < NUM_POINTS; i++) {
       if (i == hi) {
         continue;
       }
       o += s[i];
     }
+    o /= DIM;
 
-    for (int i = 0; i < DIM; i++) {
-      o[i] /= DIM;
-    }
+    /* Reflection. */
+    const float4 r = o + reflect * (o - s[hi]);
+    const float error_r = compute_error(objective_fn, r, dest);
 
-    // reflection
-    float4 r;
-    for (int i = 0; i < DIM; i++) {
-      r[i] = o[i] + reflect * (o[i] - s[hi][i]);
-    }
+    if (error_r < error[nh]) {
+      if (error_r < error[lo]) {
+        /* Expansion. */
+        const float4 e = o + expand * (o - s[hi]);
+        const float error_e = compute_error(objective_fn, e, dest);
 
-    float fr = compute_error(objectiveFn, r, closure);
-    if (fr < f[nh]) {
-      if (fr < f[lo]) {
-        // expansion
-        float4 e;
-        for (int i = 0; i < DIM; i++) {
-          e[i] = o[i] + expand * (o[i] - s[hi][i]);
-        }
-
-        float fe = compute_error(objectiveFn, e, closure);
-        if (fe < fr) {
+        if (error_e < error_r) {
           s[hi] = e;
-          f[hi] = fe;
+          error[hi] = error_e;
           continue;
         }
       }
 
       s[hi] = r;
-      f[hi] = fr;
+      error[hi] = error_r;
       continue;
     }
 
-    // contraction
-    float4 c;
-    for (int i = 0; i < DIM; i++) {
-      c[i] = o[i] - contract * (o[i] - s[hi][i]);
-    }
+    /* Contraction. */
+    const float4 c = o - contract * (o - s[hi]);
+    const float error_c = compute_error(objective_fn, c, dest);
 
-    float fc = compute_error(objectiveFn, c, closure);
-    if (fc < f[hi]) {
+    if (error_c < error[hi]) {
       s[hi] = c;
-      f[hi] = fc;
+      error[hi] = error_c;
       continue;
     }
 
-    // reduction
-    for (int k = 0; k < NB_POINTS; k++) {
+    /* Reduction. */
+    for (int k = 0; k < NUM_POINTS; k++) {
       if (k == lo) {
         continue;
       }
-      for (int i = 0; i < DIM; i++) {
-        s[k][i] = s[lo][i] + shrink * (s[k][i] - s[lo][i]);
-      }
-      f[k] = compute_error(objectiveFn, s[k], closure);
+      s[k] = s[lo] + shrink * (s[k] - s[lo]);
+      error[k] = compute_error(objective_fn, s[k], dest);
     }
   }
 
-  // return best point and its value
-  pmin = s[lo];
-  return f[lo];
+  /* Return best point and the error. */
+  result = s[lo];
+  return error[lo];
 }
 template float NelderMead<GGXBrdfClosure>(
-    float4 &, const float4, float, float, int, FitLTC, const GGXBrdfClosure &);
+    float4 &, const float4, float, float, int, LTCFitter, const GGXBrdfClosure &);
 template float NelderMead<OrenNayarClosure>(
-    float4 &, const float4, float, float, int, FitLTC, const OrenNayarClosure &);
+    float4 &, const float4, float, float, int, LTCFitter, const OrenNayarClosure &);
 
-template<typename C>
-void fit(LtcData &ltc, const C &closure, const bool isotropic = false, const float epsilon = 0.05f)
+template<typename BSDF> float4 fit_ltc(const float3 coords, const float epsilon = 0.05f)
 {
-  float4 resultFit;
+  const BSDF bsdf = BSDF::from_ltc_coords(coords);
+  LTCFitter fitter = init_ltc_fit<BSDF>(bsdf);
 
-  FitLTC fitter = FitLTC::init(ltc, isotropic);
+  /* Find best-fit LTC lobe. */
+  float4 result;
+  /* float error = */ NelderMead(result, fitter.pack(), epsilon, 1e-5f, 100, fitter, bsdf);
 
-  /* Find best-fit LTC lobe (scale, alphax, alphay) */
-  /* float error = */ NelderMead(resultFit, ltc.pack(), epsilon, 1e-5f, 100, fitter, closure);
-
-  /* Update LTC with best fitting values */
-  fitter.update(resultFit);
-  ltc = fitter.ltc;
+  /* Update LTC with best fitting values. */
+  fitter.update(result);
+  return fitter.pack_inverse();
 }
-template void fit<GGXBrdfClosure>(LtcData &, const GGXBrdfClosure &, const bool, const float);
-template void fit<OrenNayarClosure>(LtcData &, const OrenNayarClosure &, const bool, const float);
-
-template<typename LUT> float4 fitLTC(const LUT &lut, LtcData &ltc)
-{
-  const bool isotropic = (lut.V.z == 1.0f);
-
-  const float3 L = average_light_dir(lut);
-  ltc.X = float3(L.z, 0, -L.x);
-  ltc.Y = float3(0.0f, 1.0f, 0.0f);
-  ltc.Z = L;
-  ltc.update();
-
-  fit(ltc, lut, isotropic);
-
-  return ltc.pack_inverse();
-}
-template float4 fitLTC<GGXBrdfClosure>(const GGXBrdfClosure &, LtcData &);
-template float4 fitLTC<OrenNayarClosure>(const OrenNayarClosure &, LtcData &);
+template float4 fit_ltc<GGXBrdfClosure>(const float3, const float);
+template float4 fit_ltc<OrenNayarClosure>(const float3, const float);
 
 [[compute]] [[local_size(LUT_WORKGROUP_SIZE, LUT_WORKGROUP_SIZE)]]
 void comp_main([[global_invocation_id]] const uint3 global_id, [[resource_table]] LUT &lut)
@@ -691,23 +717,13 @@ void comp_main([[global_invocation_id]] const uint3 global_id, [[resource_table]
     case LUT_OREN_NAYAR:
       result = integrate(OrenNayarClosure::from_coords(lut_normalized_coordinate));
       break;
-    case LUT_OREN_NAYAR_LTC: {
-      /* Initialize with diffuse. Note this works because Oren Nayar is diffuse. For GGX we need
-       * better initial guess. */
-      LtcData init;
-      init.m13 = init.m23 = 0.0f;
-      init.m11 = init.m22 = 1.0f;
-      result = fitLTC(OrenNayarClosure::from_ltc_coords(lut_normalized_coordinate), init);
+    case LUT_OREN_NAYAR_LTC:
+      result = fit_ltc<OrenNayarClosure>(lut_normalized_coordinate);
       break;
-    }
-    case LUT_GGX_BRDF_LTC: {
+    case LUT_GGX_BRDF_LTC:
       /* NOTE: this part is not tested due to bad initialization. */
-      LtcData init;
-      init.m13 = init.m23 = 0.0f;
-      init.m11 = init.m22 = 1.0f;
-      result = fitLTC(GGXBrdfClosure::from_ltc_coords(lut_normalized_coordinate), init);
+      result = fit_ltc<GGXBrdfClosure>(lut_normalized_coordinate);
       break;
-    }
   }
 
   imageStore(lut.image, int3(global_id), result);

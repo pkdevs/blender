@@ -153,3 +153,20 @@ int midpoint(int a, int b)
   int sign = (b > a) ? 1 : -1;
   return a + sign * int((larger - smaller) / 2u);
 }
+
+/* Kahan summation, Same as +=, but reduces the numerical error when summing a sequence of numbers,
+ * by keeping a running compensation. */
+struct KahanSum {
+  /* Running compensation for lost lower-order bits. */
+  float c = 0.0f;
+  /* Final sum. */
+  float sum = 0.0f;
+
+  void add(const float value)
+  {
+    const float y = value - c;
+    const float t = sum + y;
+    c = (t - sum) - y;
+    sum = t;
+  }
+};
