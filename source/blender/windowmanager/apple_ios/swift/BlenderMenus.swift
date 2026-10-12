@@ -5,15 +5,17 @@
 /** \file
  * Blender's own menus, such as Add, a modifier's or the context menu, as SwiftUI menus. Their
  * items come from Blender, which builds them from the scene, so they are asked for ahead of time,
- * a few levels deep, and again when the mode or the selection changes. Choosing an item runs it in
- * Blender.
+ * a few levels deep, and again only when Blender says what they show may have changed. A menu
+ * whose items come back the same is left alone, and items keep their identity, so a change
+ * updates only the items that changed. Choosing an item runs it in Blender.
  */
 
 import SwiftUI
 import UIKit
 
 struct BlenderMenuItem: Identifiable, Equatable {
-  let id: Int
+  /** Its place in Blender's menus, which stays the same as the menu changes around it. */
+  var id: String { route }
   let title: String
   let icon: String
   /** Where the item is in Blender's menus, to open it as a submenu or run it. */
@@ -112,7 +114,7 @@ final class BlenderMenus {
         continue
       }
       guard let title = item.string("title"), !title.isEmpty, let route = item["route"] as? JSON else { continue }
-      result.append(BlenderMenuItem(id: result.count, title: title, icon: item.string("icon") ?? "",
+      result.append(BlenderMenuItem(title: title, icon: item.string("icon") ?? "",
                                     route: encode(route), submenu: item.bool("submenu"),
                                     disabled: item.bool("disabled"), checked: item.bool("checked"),
                                     sectionStart: sectionStart))
@@ -122,7 +124,7 @@ final class BlenderMenus {
   }
 }
 
-/** What Blender's menus depend on: the mode and the selection, from the toolbar snapshot. */
+/** Changes when what Blender's menus show may have, from the toolbar snapshot. */
 extension EnvironmentValues {
   @Entry var blenderMenuContext = ""
 }

@@ -23,6 +23,7 @@
 #include "BKE_preview_image.hh"
 #include "BKE_scene.hh"
 #include "BKE_screen.hh"
+#include "BKE_undo_system.hh"
 #include "BKE_wm_runtime.hh"
 #include "BLT_translation.hh"
 #include "ED_render.hh"
@@ -1974,6 +1975,16 @@ std::string ios_toolbar_build_json_for_context(bContext *C)
   json += ios_json_escape(active_tool_id ? active_tool_id : "");
   json += "\",\"canUndo\":";
   json += can_undo ? "true" : "false";
+  /* Which undo step is active: it moves with every change an operator makes, and with undo and
+   * redo, once per action rather than during one. Menus are built from the scene, so the interface
+   * asks for them again when this changes, and only then. */
+  json += ",\"menuState\":\"";
+  if (const wmWindowManager *wm = CTX_wm_manager(C); wm && wm->runtime->undo_stack) {
+    const UndoStack *stack = wm->runtime->undo_stack;
+    json += std::to_string(uintptr_t(stack->step_active)) + ":" +
+            std::to_string(BLI_listbase_count(&stack->steps));
+  }
+  json += "\"";
   json += ",\"settings\":";
   json += settings_json;
   json += ",\"toolSettings\":";

@@ -24,11 +24,9 @@ final class ShellModel {
   private(set) var tools: [JSON?] = []
   private(set) var activeTool = ""
   private(set) var actions: [JSON] = []
-  /** What Blender's menus depend on: the mode, and the selection, for which the quick actions
-   * stand in. */
-  var menuContext: String {
-    "\(mode)|\(objectMode)|" + actions.compactMap { $0.string("title") }.joined(separator: ",")
-  }
+  /** Changes when what Blender's menus show may have: the active undo step moves with every
+   * change an operator makes, once per action. */
+  private(set) var menuContext = ""
   private(set) var brushes: JSON?
   private(set) var canUndo = false
   /** Adjust Last Operation: the last operator's settings, or none. */
@@ -112,6 +110,7 @@ final class ShellModel {
     set(\.actions, toolbar.array("actions"), equal: jsonListEqual)
     set(\.brushes, toolbar.dict("brushes"), equal: { jsonEqual($0, $1) })
     set(\.canUndo, toolbar.bool("canUndo"))
+    set(\.menuContext, "\(toolbar.string("objectMode") ?? "")|\(toolbar.string("menuState") ?? "")")
     set(\.redo, toolbar.dict("redo"), equal: { jsonEqual($0, $1) })
     let gizmo = (toolbar["navigationGizmo"] as? [NSNumber])?.map(\.doubleValue) ?? []
     if gizmo.count == 3 { set(\.navigationGizmo, gizmo) }
