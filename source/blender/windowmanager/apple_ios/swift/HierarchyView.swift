@@ -37,6 +37,12 @@ final class HierarchyStore: ObservableObject {
     }
   }
 
+  /** Whether rows sit under this one. */
+  func hasChildren(_ node: JSON) -> Bool {
+    let key = node.keyString
+    return nodes.contains { $0.string("parent") == key }
+  }
+
   /** Rows in outline order; a search shows the matches and the collections leading to them. */
   var visible: [JSON] {
     var matches: Set<String>?
@@ -272,62 +278,122 @@ struct OutlineList: View {
   @State private var dropTarget: String?
   /** Rows are open until closed, as in Blender's Outliner. */
   @State private var collapsed = Set<String>()
+  /** The row whose swipe actions show, and how far it is pulled. */
+  @State private var swiped: String?
+  @State private var swipeOffset: CGFloat = 0
 
   private static func selected(_ nodes: [JSON]) -> Set<String> {
     Set(nodes.filter { $0.string("kind") == "object" && $0.bool("selected") }.compactMap { $0.string("key") })
   }
 
-  var body: some View {
-    List(selection: Binding(get: { selection }, set: choose)) {
-      outline(OutlineItem.tree(store.visible))
+  /** The rows in outline order, without those under closed rows; a search shows its matches. */
+  private var rows: [JSON] {
+    let nodes = store.visible
+    guard store.query.isEmpty else { return nodes }
+    var hiddenUnder: [String] = []
+    return nodes.filter { node in
+      let key = node.keyString
+      if hiddenUnder.contains(where: { key.hasPrefix($0 + "/") }) { return false }
+      if collapsed.contains(key) { hiddenUnder.append(key) }
+      return true
     }
-    .listStyle(.plain)
-    .scrollContentBackground(.hidden)
-    .environment(\.editMode, .constant(store.editing ? .active : .inactive))
+  }
+
+  var body: some View {
+    ScrollView {
+      LazyVStack(spacing: 2) {
+        ForEach(rows, id: \.keyString) { node in
+          SwipeRow(id: node.keyString, swiped: $swiped, offset: $swipeOffset,
+                   leading: swipeActions(node, ["duplicate", "rename"]),
+                   trailing: swipeActions(node, ["visibility", "delete"])) {
+            row(node)
+          }
+          .transition(.opacity)
+        }
+      }
+      .padding(.horizontal, 8)
+      .padding(.vertical, 4)
+    }
+#if !os(visionOS)
+    .scrollDismissesKeyboard(.immediately)
+#endif
     /* Published before it changes: the new nodes are the value sent. */
     .onReceive(store.$nodes) { nodes in selection = Self.selected(nodes) }
+    .onChange(of: store.editing) { closeSwipe() }
     .accessibilityIdentifier("blender.hierarchy.outline")
   }
 
-  private func outline(_ items: [OutlineItem]) -> AnyView {
-    AnyView(ForEach(items) { item in
-      if let children = item.children {
-        DisclosureGroup(isExpanded: Binding(
-          get: { !store.query.isEmpty || !collapsed.contains(item.id) },
-          set: { open in if open { collapsed.remove(item.id) } else { collapsed.insert(item.id) } }))
-        {
-          outline(children)
-        } label: {
-          row(item.node)
-        }
-      }
-      else {
-        row(item.node)
-      }
-    })
+  private var animation: Animation? { UIAccessibility.isReduceMotionEnabled ? nil : .smooth(duration: 0.25) }
+
+  private func closeSwipe() {
+    withAnimation(animation) {
+      swiped = nil
+      swipeOffset = 0
+    }
   }
 
-  /** Selecting a row selects its object in Blender: one with a tap, several in Select mode. */
-  private func choose(_ keys: Set<String>) {
-    let added = keys.subtracting(selection), removed = selection.subtracting(keys)
-    selection = keys
-    if !store.editing {
-      guard let key = added.first ?? keys.first, let id = store.byKey[key]?.string("id") else { return }
-      store.send(["action": "select", "id": id, "extend": false, "value": true])
-      Haptics.selection()
+  /** A tap selects the object; in Select mode it adds it to or takes it from the selection. */
+  private func tap(_ node: JSON) {
+    if swiped != nil {
+      closeSwipe()
       return
     }
-    for key in added { if let id = store.byKey[key]?.string("id") { store.send(["action": "select", "id": id, "extend": true, "value": true]) } }
-    for key in removed { if let id = store.byKey[key]?.string("id") { store.send(["action": "select", "id": id, "extend": true, "value": false]) } }
+    let key = node.keyString
+    guard node.string("kind") == "object", node.bool("enabled"), let id = node.string("id") else { return }
+    if store.editing {
+      let on = !selection.contains(key)
+      if on { selection.insert(key) } else { selection.remove(key) }
+      store.send(["action": "select", "id": id, "extend": true, "value": on])
+    }
+    else {
+      selection = [key]
+      store.send(["action": "select", "id": id, "extend": false, "value": true])
+    }
+    Haptics.selection()
+  }
+
+  private func toggle(_ key: String) {
+    withAnimation(animation) {
+      if collapsed.contains(key) { collapsed.remove(key) } else { collapsed.insert(key) }
+    }
   }
 
   private func row(_ node: JSON) -> some View {
     let key = node.keyString
     let collection = node.string("kind") == "collection"
-    let selectable = !collection && node.bool("enabled")
-    return HStack(spacing: 8) {
+    let enabled = node.bool("enabled")
+    /* Select mode marks the selection with its check circles instead. */
+    let selected = selection.contains(key) && !store.editing
+    let open = !store.query.isEmpty || !collapsed.contains(key)
+    return HStack(spacing: 6) {
+      if store.editing {
+        Image(systemName: selection.contains(key) ? "checkmark.circle.fill" : "circle")
+          .font(.title3)
+          .foregroundStyle(selection.contains(key) ? Color.accentColor : .secondary)
+          .opacity(!collection && enabled ? 1 : 0)
+          .transition(.move(edge: .leading).combined(with: .opacity))
+      }
+      Color.clear.frame(width: CGFloat(14 * max(0, node.int("depth") ?? 0)), height: 1)
       Group {
-        if let image = BlenderIcon.image(node.string("icon"), themed: true) {
+        if store.hasChildren(node) {
+          Button { toggle(key) } label: {
+            Image(systemName: "chevron.right")
+              .font(.footnote.weight(.semibold))
+              .rotationEffect(.degrees(open ? 90 : 0))
+              .frame(width: 22, height: 36)
+              .contentShape(Rectangle())
+          }
+          .buttonStyle(.plain)
+          .foregroundStyle(selected ? Color.white : .secondary)
+          .accessibilityLabel(open ? "Collapse" : "Expand")
+        }
+        else {
+          Color.clear
+        }
+      }
+      .frame(width: 22)
+      Group {
+        if let image = BlenderIcon.image(node.string("icon"), themed: !selected) {
           Image(uiImage: image).resizable().scaledToFit()
         }
         else {
@@ -336,55 +402,81 @@ struct OutlineList: View {
       }
       .frame(width: 22, height: 22)
       Text(node.string("name") ?? "")
-        .foregroundStyle(node.bool("enabled") ? .primary : .secondary)
-        .lineLimit(2)
+        .foregroundStyle(selected ? Color.white : enabled ? .primary : .secondary)
+        .lineLimit(1)
       Spacer(minLength: 0)
       if node.bool("hidden") {
         Button { store.act("visibility", [node], value: false) } label: {
-          Image(systemName: "eye.slash").foregroundStyle(.secondary).frame(width: 44, height: 32)
+          Image(systemName: "eye.slash").frame(width: 36, height: 36)
         }
         .buttonStyle(.plain)
+        .foregroundStyle(selected ? Color.white : .secondary)
         .accessibilityLabel("Show in viewport")
       }
     }
-    .selectionDisabled(!selectable)
-    .listRowBackground(dropTarget == key ? Color.accentColor.opacity(0.25) : nil)
-    .swipeActions(edge: .leading, allowsFullSwipe: false) { swipeButtons(node, ["duplicate", "rename"]) }
-    .swipeActions(edge: .trailing, allowsFullSwipe: false) { swipeButtons(node, ["delete", "visibility"]) }
-    .contextMenu { menu(store.targets(node)) }
-    .draggable(DraggedRows.payload(store.targets(node))) {
-      Label(node.string("name") ?? "", systemImage: collection ? "folder" : "cube").padding(8)
+    .padding(.horizontal, 8)
+    .frame(minHeight: 40)
+    /* The selection as a rounded rectangle, as in a sidebar such as Notes'; a drag's target lit up
+     * the same way. */
+    .background(
+      RoundedRectangle(cornerRadius: 10, style: .continuous)
+        .fill(selected ? Color.accentColor : dropTarget == key ? Color.accentColor.opacity(0.3) : .clear))
+    .contentShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+    .onTapGesture { tap(node) }
+    .contextMenu { menu(store.targets(store.byKey[key] ?? node)) }
+    /* Touch and hold lifts the row; moving it drags it into a collection or onto an object. */
+    .onDrag {
+      let rows = store.targets(store.byKey[key] ?? node)
+      guard store.allow(rows, "move") else { return NSItemProvider() }
+      return NSItemProvider(object: DraggedRows.payload(rows) as NSString)
+    } preview: {
+      /* The row as it looks, with its own icon. */
+      HStack(spacing: 8) {
+        if let image = BlenderIcon.image(node.string("icon"), themed: true) {
+          Image(uiImage: image).resizable().scaledToFit().frame(width: 22, height: 22)
+        }
+        Text(node.string("name") ?? "")
+      }
+      .padding(.horizontal, 14)
+      .padding(.vertical, 8)
+      .background(.regularMaterial, in: Capsule())
     }
-    .dropDestination(for: String.self) { items, _ in
-      let moving = items.flatMap(DraggedRows.keys).compactMap { store.byKey[$0] }
-      guard store.canMove(moving, to: node) else { return false }
-      store.move(moving, to: node)
-      return true
-    } isTargeted: { over in
+    .onDrop(of: [.plainText], isTargeted: Binding(get: { dropTarget == key }, set: { over in
       if over { dropTarget = key } else if dropTarget == key { dropTarget = nil }
+    })) { providers in
+      guard let provider = providers.first else { return false }
+      _ = provider.loadObject(ofClass: NSString.self) { payload, _ in
+        guard let payload = payload as? String else { return }
+        DispatchQueue.main.async {
+          guard let target = store.byKey[key] else { return }
+          store.move(DraggedRows.keys(payload).compactMap { store.byKey[$0] }, to: target)
+        }
+      }
+      return true
     }
+    .accessibilityElement(children: .combine)
+    .accessibilityAddTraits(selection.contains(key) ? [.isButton, .isSelected] : .isButton)
     .accessibilityIdentifier("blender.hierarchy." + (node.string("id") ?? ""))
-    .accessibilityValue(node.bool("active") ? "Active" : "")
   }
 
-  @ViewBuilder
-  private func swipeButtons(_ node: JSON, _ actions: [String]) -> some View {
-    ForEach(actions.filter { store.allow([node], $0) }, id: \.self) { action in
-      let hidden = node.bool("hidden")
+  /** The actions a swipe shows, as Blender allows them for the row now. */
+  private func swipeActions(_ node: JSON, _ actions: [String]) -> [SwipeAction] {
+    let node = store.byKey[node.keyString] ?? node
+    let hidden = node.bool("hidden")
+    return actions.filter { store.allow([node], $0) }.map { action in
       switch action {
         case "delete":
-          Button(role: .destructive) { delete([node]) } label: { Label("Delete", systemImage: "trash") }
+          return SwipeAction(title: "Delete", symbol: "trash", tint: .red) { delete([node]) }
         case "duplicate":
-          Button { store.act("duplicate", [node]) } label: { Label("Duplicate", systemImage: "plus.square.on.square") }
-            .tint(.blue)
-        case "visibility":
-          Button { store.act("visibility", [node], value: !hidden) } label: {
-            Label(hidden ? "Show" : "Hide", systemImage: hidden ? "eye" : "eye.slash")
+          return SwipeAction(title: "Duplicate", symbol: "plus.square.on.square", tint: .blue) {
+            store.act("duplicate", [node])
           }
-          .tint(.gray)
+        case "visibility":
+          return SwipeAction(title: hidden ? "Show" : "Hide", symbol: hidden ? "eye" : "eye.slash", tint: .gray) {
+            store.act("visibility", [node], value: !hidden)
+          }
         default:
-          Button { rename(node) } label: { Label("Rename", systemImage: "pencil") }
-            .tint(.gray)
+          return SwipeAction(title: "Rename", symbol: "pencil", tint: .gray) { rename(node) }
       }
     }
   }
@@ -416,27 +508,91 @@ struct OutlineList: View {
   }
 }
 
-/** A row of the outline and the rows under it, from the flat list Blender sends. */
-struct OutlineItem: Identifiable {
-  let node: JSON
-  var children: [OutlineItem]?
-  var id: String { node.keyString }
+struct SwipeAction {
+  let title: String
+  let symbol: String
+  let tint: Color
+  let run: () -> Void
+}
 
-  static func tree(_ nodes: [JSON]) -> [OutlineItem] {
-    var childrenOf: [String: [JSON]] = [:]
-    var keys = Set<String>()
-    for node in nodes { keys.insert(node.keyString) }
-    var roots: [JSON] = []
-    for node in nodes {
-      let parent = node.string("parent") ?? ""
-      if !parent.isEmpty && keys.contains(parent) { childrenOf[parent, default: []].append(node) }
-      else { roots.append(node) }
+/** A row that a sideways swipe pulls aside to show its actions, as a list's rows do. One row is
+ * open at a time. */
+struct SwipeRow<Content: View>: View {
+  let id: String
+  @Binding var swiped: String?
+  @Binding var offset: CGFloat
+  let leading: [SwipeAction]
+  let trailing: [SwipeAction]
+  @ViewBuilder let content: Content
+  @State private var dragStart: CGFloat?
+
+  private let buttonWidth: CGFloat = 104
+
+  private var shown: CGFloat { swiped == id ? offset : 0 }
+
+  var body: some View {
+    ZStack {
+      HStack(spacing: 6) {
+        if shown > 0 { buttons(leading) }
+        Spacer(minLength: 0)
+        if shown < 0 { buttons(trailing) }
+      }
+      content
+        .offset(x: shown)
     }
-    func item(_ node: JSON) -> OutlineItem {
-      let children = childrenOf[node.keyString]?.map(item)
-      return OutlineItem(node: node, children: children)
+    .clipped()
+    .simultaneousGesture(swipe)
+  }
+
+  private func buttons(_ actions: [SwipeAction]) -> some View {
+    ForEach(actions, id: \.title) { action in
+      Button {
+        withAnimation(.smooth(duration: 0.25)) {
+          swiped = nil
+          offset = 0
+        }
+        action.run()
+      } label: {
+        Label(action.title, systemImage: action.symbol)
+          .font(.subheadline.weight(.medium))
+          .lineLimit(1)
+          .foregroundStyle(.white)
+          .frame(width: buttonWidth - 6, height: 36)
+          .background(action.tint, in: Capsule())
+      }
+      .buttonStyle(.plain)
+      .transition(.opacity)
     }
-    return roots.map(item)
+  }
+
+  private var swipe: some Gesture {
+    DragGesture(minimumDistance: 18)
+      .onChanged { value in
+        /* Sideways only; an upward or downward drag scrolls the list. */
+        guard dragStart != nil || abs(value.translation.width) > abs(value.translation.height) * 1.5 else { return }
+        if dragStart == nil {
+          dragStart = shown
+          if swiped != id {
+            swiped = id
+            offset = 0
+          }
+        }
+        let leadingLimit = leading.isEmpty ? 0 : CGFloat(leading.count) * buttonWidth + 20
+        let trailingLimit = trailing.isEmpty ? 0 : CGFloat(trailing.count) * buttonWidth + 20
+        offset = max(-trailingLimit, min(leadingLimit, (dragStart ?? 0) + value.translation.width))
+      }
+      .onEnded { _ in
+        guard dragStart != nil else { return }
+        dragStart = nil
+        let target: CGFloat
+        if offset > buttonWidth / 2 { target = CGFloat(leading.count) * buttonWidth }
+        else if offset < -buttonWidth / 2 { target = -CGFloat(trailing.count) * buttonWidth }
+        else { target = 0 }
+        withAnimation(.smooth(duration: 0.25)) {
+          offset = target
+          if target == 0 { swiped = nil }
+        }
+      }
   }
 }
 
