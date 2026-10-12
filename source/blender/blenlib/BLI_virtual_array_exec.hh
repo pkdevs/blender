@@ -4,6 +4,22 @@
 
 #pragma once
 
+/**
+ * Using virtual arrays (#VArray) is very useful to represent values which can be an array but are
+ * often just a single value. The downside of using the #VArray indirection is that element access
+ * requires a virtual function call which has significant overhead in hot loops and prevents the
+ * compiler from doing optimizations such as auto-vectorization.
+ *
+ * This file provides the ability to run element-wise functions efficiently when all the inputs are
+ * virtual arrays. It does so by giving explicit control over the trade-off between run-time
+ * performance, compile time and binary size. For example, the most efficient code could be
+ * achieved when the hot loop is generated for all possible variations of inputs
+ * (#AllSpanOrSingle). However, that can result in an exponentially increasing amount of code with
+ * the number of inputs. Instead, other execution presets like #SomeSpanOrSingle or #Materialized
+ * can be used which can offer close to the same performance in most cases without many of the
+ * downsides.
+ */
+
 #include "BLI_devirtualize_parameters.hh"
 #include "BLI_generic_virtual_array.hh"
 #include "BLI_parameter_pack_utils.hh"
