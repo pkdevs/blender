@@ -21,15 +21,12 @@
 #include "GHOST_IOSRuntime.hh"
 
 #import "wm_apple_ios_blend_document.hh"
-#import "wm_apple_ios_compile_indicator.hh"
 #import "wm_apple_ios_file_drop.hh"
 #import "wm_apple_ios_icons.hh"
 #import "wm_apple_ios_launcher.hh"
-#import "wm_apple_ios_platform.hh"
 
 extern "C" void WM_apple_ios_ui_command_enqueue(int command);
 extern "C" void WM_apple_ios_ui_operator_enqueue(const char *op_name);
-extern "C" void WM_apple_ios_ui_operator_at_position_enqueue(const char *op_name, int x, int y);
 extern "C" void WM_apple_ios_ui_operator_enum_enqueue(const char *op_name,
                                                       const char *prop_name,
                                                       const char *prop_value);

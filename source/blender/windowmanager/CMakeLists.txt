@@ -191,7 +191,6 @@ if(WITH_APPLE_CROSSPLATFORM)
   list(APPEND SRC
     apple_ios/wm_apple_ios_alerts.mm
     apple_ios/wm_apple_ios_blend_document.mm
-    apple_ios/wm_apple_ios_compile_indicator.mm
     apple_ios/wm_apple_ios_file_drop.mm
     apple_ios/wm_apple_ios_interface.mm
     apple_ios/wm_apple_ios_launcher.mm
@@ -199,12 +198,10 @@ if(WITH_APPLE_CROSSPLATFORM)
 
     apple_ios/wm_apple_ios_alerts.hh
     apple_ios/wm_apple_ios_blend_document.hh
-    apple_ios/wm_apple_ios_compile_indicator.hh
     apple_ios/wm_apple_ios_file_drop.hh
     apple_ios/wm_apple_ios_icons.hh
     apple_ios/wm_apple_ios_interface.hh
     apple_ios/wm_apple_ios_launcher.hh
-    apple_ios/wm_apple_ios_platform.hh
     apple_ios/wm_apple_ios_swift_bridge.h
   )
 endif()

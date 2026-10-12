@@ -196,16 +196,6 @@ extern "C" NSObject *wm_apple_ios_file_drop_install(UIView *view, void *window)
 }
 
 /** The shader compilation progress, shown while Blender is held up compiling. */
-extern "C" NSObject *wm_apple_ios_compile_indicator(UIView *overlay)
-{
-  return [[[WMIOSCompileIndicator alloc] initWithOverlay:overlay below:nil] autorelease];
-}
-
-extern "C" void wm_apple_ios_compile_indicator_stop(NSObject *indicator)
-{
-  [(WMIOSCompileIndicator *)indicator stop];
-}
-
 /* -------------------------------------------------------------------- */
 /** \name Blender's Menus in UIKit
  * \{ */
@@ -386,3 +376,9 @@ extern "C" NSArray *wm_apple_ios_menu_result(uint64_t request)
 }
 
 /** \} */
+
+extern "C" bool wm_apple_ios_shader_compilation(int *finished, int *total, double *busy_seconds)
+{
+  *busy_seconds = GHOST_ios_engine_busy_seconds();
+  return GHOST_ios_shader_compilation(finished, total);
+}

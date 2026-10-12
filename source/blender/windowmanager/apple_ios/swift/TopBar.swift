@@ -19,13 +19,13 @@ final class ShellCommands {
   var render: SwiftRender?
   var settings: SwiftSettings?
   let model: ShellModel
-  let overlay: ShellOverlay
+  let shell: ShellPanels
   /** Where the Share button is, for the share sheet's popover. */
   weak var shareSource: UIView?
 
-  init(model: ShellModel, overlay: ShellOverlay) {
+  init(model: ShellModel, shell: ShellPanels) {
     self.model = model
-    self.overlay = overlay
+    self.shell = shell
   }
 
   private func section(_ children: [UIMenuElement]) -> UIMenu {
@@ -109,14 +109,14 @@ final class ShellCommands {
       return toggle
     }
     let panels = [
-      toggle("Outliner", BlenderIcon.image("OUTLINER"), model.hierarchyShown) { [overlay] in
-        overlay.panels.toggleHierarchy()
+      toggle("Outliner", BlenderIcon.image("OUTLINER"), model.hierarchyShown) { [shell] in
+        shell.panels.toggleHierarchy()
       },
       toggle("Timeline", UIImage(named: "blender.time")?.withRenderingMode(.alwaysTemplate), model.timelineShown) {
-        [overlay] in overlay.timeline.toggle()
+        [shell] in shell.timeline.toggle()
       },
-      toggle("Properties", BlenderIcon.image("PROPERTIES"), model.inspectorShown) { [overlay] in
-        overlay.panels.toggleInspector()
+      toggle("Properties", BlenderIcon.image("PROPERTIES"), model.inspectorShown) { [shell] in
+        shell.panels.toggleInspector()
       },
     ]
     let shading = UIAction(title: "Viewport Shading", image: UIImage(systemName: "circle.lefthalf.filled")) {
@@ -300,7 +300,7 @@ private func iconImage(_ image: UIImage?) -> Image {
 
 struct DocumentToolbar: ToolbarContent {
   @Bindable var model: ShellModel
-  let overlay: ShellOverlay
+  let shell: ShellPanels
   let commands: ShellCommands
   @Binding var stripWidth: CGFloat
 
@@ -318,7 +318,7 @@ struct DocumentToolbar: ToolbarContent {
     }
     ToolbarItemGroup(placement: .topBarLeading) {
       modeMenu
-      Button("Add", systemImage: "plus") { overlay.assets.toggle() }
+      Button("Add", systemImage: "plus") { shell.assets.toggle() }
         .accessibilityIdentifier("blender.assets")
     }
     if model.mode == "mesh_edit" && !model.compact {
@@ -347,9 +347,9 @@ struct DocumentToolbar: ToolbarContent {
                      accessibilityLabel: "More", tint: .label, deferred: false) { commands.compactMenu() }
           .frame(width: 44, height: 44)
           .background(ShareSource(commands: commands))
-          .shadingPopover(model: model, overlay: overlay)
+          .shadingPopover(model: model, shell: shell)
           .popover(isPresented: $model.toolSettingsOpen) {
-            overlay.panels.toolSettingsContent { model.toolSettingsOpen = false }
+            shell.panels.toolSettingsContent { model.toolSettingsOpen = false }
           }
           .accessibilityIdentifier("blender.actions")
       }
@@ -364,11 +364,11 @@ struct DocumentToolbar: ToolbarContent {
     ToolbarItem(placement: .principal) { centerSettings }
     ToolbarItemGroup(placement: .topBarTrailing) {
       panelToggle("Outliner", image: BlenderIcon.image("OUTLINER"), isOn: model.hierarchyShown,
-                  identifier: "blender.hierarchy") { overlay.panels.toggleHierarchy() }
+                  identifier: "blender.hierarchy") { shell.panels.toggleHierarchy() }
       panelToggle("Timeline", image: UIImage(named: "blender.time")?.withRenderingMode(.alwaysTemplate),
-                  isOn: model.timelineShown, identifier: "blender.timeline") { overlay.timeline.toggle() }
+                  isOn: model.timelineShown, identifier: "blender.timeline") { shell.timeline.toggle() }
       panelToggle("Properties", image: BlenderIcon.image("PROPERTIES"), isOn: model.inspectorShown,
-                  identifier: "blender.inspector") { overlay.panels.toggleInspector() }
+                  identifier: "blender.inspector") { shell.panels.toggleInspector() }
     }
 #if !os(visionOS)
     ToolbarSpacer(.fixed, placement: .topBarTrailing)
@@ -454,7 +454,7 @@ struct DocumentToolbar: ToolbarContent {
         .frame(width: 44, height: 44)
         .panelGlass(in: Circle())
         .popover(isPresented: $model.toolSettingsOpen) {
-          overlay.panels.toolSettingsContent { model.toolSettingsOpen = false }
+          shell.panels.toolSettingsContent { model.toolSettingsOpen = false }
         }
         .background(ToolStripMarker { model.toolStripRoom = $0 })
         .accessibilityIdentifier("blender.tool-settings.more")
@@ -503,7 +503,7 @@ struct DocumentToolbar: ToolbarContent {
     let overflow = stripWidth > room + 0.5
     return HStack(spacing: 4) {
       ScrollView(.horizontal, showsIndicators: false) {
-        ToolStrip(store: overlay.panels.toolStripStore)
+        ToolStrip(store: shell.panels.toolStripStore)
           .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { stripWidth = $0 }
       }
       .scrollBounceBehavior(.basedOnSize, axes: .horizontal)
@@ -517,7 +517,7 @@ struct DocumentToolbar: ToolbarContent {
       }
     }
     .popover(isPresented: $model.toolSettingsOpen) {
-      overlay.panels.toolSettingsContent { model.toolSettingsOpen = false }
+      shell.panels.toolSettingsContent { model.toolSettingsOpen = false }
     }
     .tint(PanelStyle.tint)
     .padding(.horizontal, 12)
@@ -553,18 +553,18 @@ struct DocumentToolbar: ToolbarContent {
     }
     .accessibilityValue(current.1)
     .accessibilityIdentifier("blender.shading")
-    .shadingPopover(model: model, overlay: overlay)
+    .shadingPopover(model: model, shell: shell)
   }
 }
 
 extension View {
   /** Viewport shading's popover; Blender sends its settings while it is open. */
-  func shadingPopover(model: ShellModel, overlay: ShellOverlay) -> some View {
+  func shadingPopover(model: ShellModel, shell: ShellPanels) -> some View {
     @Bindable var model = model
     return popover(isPresented: $model.shadingOpen) {
-      overlay.panels.shadingContent { model.shadingOpen = false }
+      shell.panels.shadingContent { model.shadingOpen = false }
     }
-    .onChange(of: model.shadingOpen) { _, shown in overlay.panels.setShadingShown(shown) }
+    .onChange(of: model.shadingOpen) { _, shown in shell.panels.setShadingShown(shown) }
   }
 }
 

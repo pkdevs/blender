@@ -80,12 +80,15 @@ void wm_apple_ios_window_set_finger_tool(void *_Nullable window, bool use_tool);
 void wm_apple_ios_window_set_pencil_menu(void *_Nullable window,
                                          UIView<GHOSTIOSPencilMenu> *_Nullable menu);
 NSObject *_Nonnull wm_apple_ios_file_drop_install(UIView *_Nonnull view, void *_Nullable window);
-NSObject *_Nonnull wm_apple_ios_compile_indicator(UIView *_Nonnull overlay);
-void wm_apple_ios_compile_indicator_stop(NSObject *_Nonnull indicator);
 /** Blender's context menu in the Pencil's radial menu, for the window's viewport. */
 NSObject<GHOSTIOSPencilMenuDelegate> *_Nonnull wm_apple_ios_pencil_menu_source(
     void *_Nullable window, UIView *_Nonnull viewport);
 void wm_apple_ios_pencil_menu_source_detach(NSObject *_Nonnull source);
+/** Shader compilation in Blender's current burst of work, and how long Blender has been held up.
+ */
+bool wm_apple_ios_shader_compilation(int *_Nonnull finished,
+                                     int *_Nonnull total,
+                                     double *_Nonnull busy_seconds);
 /** Blender's menus in the iPadOS menu bar. */
 void wm_apple_ios_build_menu_bar(id<UIMenuBuilder> _Nonnull builder, NSArray *_Nonnull items);
 uint64_t wm_apple_ios_menu_bar_request(void);

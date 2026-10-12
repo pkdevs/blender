@@ -24,7 +24,7 @@ import UIKit
 public final class DocumentController: UIHostingController<DocumentWindow> {
   private let model: ShellModel
   private let metalView: MTKView
-  private let overlay: ShellOverlay
+  private let shell: ShellPanels
   private let commands: ShellCommands
   private let pencilMenu: PencilMenu?
   private let pencilSource: GHOSTIOSPencilMenuDelegate
@@ -40,8 +40,8 @@ public final class DocumentController: UIHostingController<DocumentWindow> {
   @objc(initWithMetalView:window:)
   public init(metalView: MTKView, window: UnsafeMutableRawPointer) {
     let model = ShellModel(window: window)
-    let overlay = ShellOverlay(model: model)
-    let commands = ShellCommands(model: model, overlay: overlay)
+    let shell = ShellPanels(model: model)
+    let commands = ShellCommands(model: model, shell: shell)
     let viewport = ViewportContainer(metalView: metalView)
 #if os(visionOS)
     /* visionOS has no Pencil to bring a radial menu up. */
@@ -52,9 +52,9 @@ public final class DocumentController: UIHostingController<DocumentWindow> {
     pencilSource = wm_apple_ios_pencil_menu_source(window, metalView)
     self.model = model
     self.metalView = metalView
-    self.overlay = overlay
+    self.shell = shell
     self.commands = commands
-    super.init(rootView: DocumentWindow(model: model, viewport: viewport, overlay: overlay, commands: commands,
+    super.init(rootView: DocumentWindow(model: model, viewport: viewport, shell: shell, commands: commands,
                                         pencilMenu: pencilMenu))
     commands.presenter = self
     commands.render = SwiftRender(presenter: self)
@@ -64,8 +64,8 @@ public final class DocumentController: UIHostingController<DocumentWindow> {
     }
     model.onRender = { [weak commands] status in commands?.render?.updateStatus(status) }
     model.onPreferences = { [weak commands] preferences in commands?.settings?.updatePreferences(preferences) }
-    model.onToolSettings = { [weak overlay] settings, ack in
-      overlay?.panels.updateToolSettingsStores(settings, acknowledgement: ack) ?? false
+    model.onToolSettings = { [weak shell] settings, ack in
+      shell?.panels.updateToolSettingsStores(settings, acknowledgement: ack) ?? false
     }
     /* Industry Compatible is the iPad's default keymap; switch once, then respect the choice. */
     if !UserDefaults.standard.bool(forKey: "BlenderKeymapDefaulted") {
@@ -79,7 +79,7 @@ public final class DocumentController: UIHostingController<DocumentWindow> {
     pencilMenu?.delegate = pencilSource
     wm_apple_ios_window_set_pencil_menu(window, pencilMenu)
     /* Assets dragged out of the pane, and files from other apps, drop onto the viewport. */
-    viewport.addInteraction(overlay.assets.dropInteraction)
+    viewport.addInteraction(shell.assets.dropInteraction)
     fileDrop = wm_apple_ios_file_drop_install(viewport, window)
     installContextMenu()
 
@@ -90,12 +90,15 @@ public final class DocumentController: UIHostingController<DocumentWindow> {
                                            name: Notification.Name("BlenderTemplatePresentation"),
                                            object: nil)
     model.pullToolbar(copy: true)
-    overlay.pullSnapshots()
+    shell.pullSnapshots()
     model.refreshWindowState()
     /* Snapshots arrive by notification. Whether the viewport has drawn is read from the
      * presentation mailbox, as a held-up Blender publishes nothing. */
     stateTimer = Timer.scheduledTimer(withTimeInterval: 0.25, repeats: true) { [weak self] _ in
-      MainActor.assumeIsolated { self?.model.refreshWindowState() }
+      MainActor.assumeIsolated {
+        self?.model.refreshWindowState()
+        self?.shell.compile.refresh()
+      }
     }
   }
 
@@ -105,7 +108,7 @@ public final class DocumentController: UIHostingController<DocumentWindow> {
   @objc private func snapshotsPublished() {
     let desktop = model.desktop
     model.pullToolbar()
-    overlay.pullSnapshots()
+    shell.pullSnapshots()
     if desktop != model.desktop { desktopChanged() }
     refreshMenuBar()
   }
@@ -115,20 +118,15 @@ public final class DocumentController: UIHostingController<DocumentWindow> {
     let desktop = model.desktop
     UserDefaults.standard.set(desktop, forKey: "BlenderDesktopInterface")
     pencilMenu?.cancel()
-    if desktop {
-      commands.setInterfaceHidden(false)
-      WM_apple_ios_ui_bottom_tray_set(0)
-    }
+    if desktop { commands.setInterfaceHidden(false) }
     /* No native controls, radial menu or bottom tray over Blender's own interface. */
     wm_apple_ios_window_set_pencil_menu(model.window, desktop ? nil : pencilMenu)
-    overlay.setNeedsLayout()
   }
 
   @objc private func templatePresentation(_ notification: Notification) {
-    overlay.panels.dismiss()
+    shell.panels.dismiss()
     let timeline = (notification.userInfo?["timeline"] as? NSNumber)?.boolValue ?? false
-    if overlay.timeline.visible != timeline { overlay.timeline.toggle() }
-    overlay.setNeedsLayout()
+    if shell.timeline.visible != timeline { shell.timeline.toggle() }
   }
 
   /** The launcher showed or hid the document window. */
@@ -143,7 +141,6 @@ public final class DocumentController: UIHostingController<DocumentWindow> {
     NotificationCenter.default.removeObserver(self)
     pencilMenu?.delegate = nil
     wm_apple_ios_pencil_menu_source_detach(pencilSource as! NSObject)
-    overlay.detach()
     model.window = nil
     wm_apple_ios_document_controller_closed(self)
   }
@@ -289,7 +286,7 @@ struct ViewportView: UIViewRepresentable {
 public struct DocumentWindow: View {
   let model: ShellModel
   let viewport: ViewportContainer
-  let overlay: ShellOverlay
+  let shell: ShellPanels
   let commands: ShellCommands
   let pencilMenu: PencilMenu?
   @State private var stripWidth: CGFloat = 0
@@ -308,7 +305,7 @@ public struct DocumentWindow: View {
       layers
         .toolbar {
           /* Kept while the bar is hidden: items added again lose the bar's centering of the strip. */
-          DocumentToolbar(model: model, overlay: overlay, commands: commands, stripWidth: $stripWidth)
+          DocumentToolbar(model: model, shell: shell, commands: commands, stripWidth: $stripWidth)
         }
         .toolbar(controlsShown ? .visible : .hidden, for: .navigationBar)
         .toolbarTitleDisplayMode(.inline)
@@ -327,9 +324,10 @@ public struct DocumentWindow: View {
         .ignoresSafeArea()
 #if !os(visionOS) /* Windows of their own there. */
       if controlsShown {
-        SidePanelsLayer(model: model, panels: overlay.panels)
+        SidePanelsLayer(model: model, panels: shell.panels)
       }
 #endif
+      CompileIndicator(progress: shell.compile)
     }
   }
 
@@ -350,12 +348,8 @@ public struct DocumentWindow: View {
         ToolRails(model: model)
 #endif
         ViewGizmoLayer(model: model)
-        BottomTrayLayer(model: model, timeline: overlay.timeline.store, assets: overlay.assets.store)
       }
-      ShellOverlayView(overlay: overlay)
-        .ignoresSafeArea()
-        .opacity(controlsShown ? 1 : 0)
-        .allowsHitTesting(controlsShown)
+      BottomTrayLayer(model: model, timeline: shell.timeline.store, assets: shell.assets.store, shown: controlsShown)
       if let pencilMenu {
         /* Frontmost; it passes touches through while it is closed. */
         PencilMenuView(menu: pencilMenu)
@@ -436,33 +430,63 @@ struct SidePanelsLayer: View {
 }
 
 /** The timeline and asset pane along the bottom, the timeline resting on the pane, as far from the
- * window's sides as from its bottom. */
+ * window's sides as from its bottom. The controls resting on the bottom edge, and Blender's own
+ * overlays such as the navigation gizmo, rise above them. */
 struct BottomTrayLayer: View {
   let model: ShellModel
   let timeline: TimelineStore
   @ObservedObject var assets: AssetsStore
+  /** Hidden in full screen and over Blender's own interface. */
+  let shown: Bool
+
+  private var tray: CGFloat {
+    guard shown else { return 0 }
+#if os(visionOS)
+    let timelineTray: CGFloat = 0 /* A window of its own. */
+#else
+    let timelineTray = timeline.visible ? TimelinePanel.height(expanded: timeline.expanded) + 8 : 0
+#endif
+    return timelineTray + (assets.visible ? AssetsPanel.height(compact: model.compact) + 8 : 0)
+  }
 
   var body: some View {
     let safe = model.safeAreaInsets
     let edge = safe.bottom + 6
     let transition = AnyTransition.opacity.combined(with: .offset(y: 14)).combined(with: .scale(scale: 0.98))
-    VStack(spacing: 8) {
-      Spacer(minLength: 0)
+    GeometryReader { proxy in
+      VStack(spacing: 8) {
+        Spacer(minLength: 0)
+        if shown {
 #if !os(visionOS) /* A window of its own there. */
-      if timeline.visible {
-        TimelinePanel(store: timeline)
-          .transition(transition)
-      }
+          if timeline.visible {
+            TimelinePanel(store: timeline)
+              .transition(transition)
+          }
 #endif
-      if assets.visible {
-        AssetsPanel(store: assets, compact: model.compact)
-          .transition(transition)
+          if assets.visible {
+            AssetsPanel(store: assets, compact: model.compact)
+              .transition(transition)
+          }
+        }
+      }
+      .padding(.leading, max(safe.left, edge))
+      .padding(.trailing, max(safe.right, edge))
+      .padding(.bottom, edge)
+      .onChange(of: [tray, proxy.size.height], initial: true) { _, values in
+        trayChanged(values[0], height: values[1])
       }
     }
-    .padding(.leading, max(safe.left, edge))
-    .padding(.trailing, max(safe.right, edge))
-    .padding(.bottom, edge)
     .ignoresSafeArea()
+  }
+
+  private func trayChanged(_ tray: CGFloat, height: CGFloat) {
+    if abs(tray - model.bottomTray) > 0.5 {
+      withAnimation(SwiftTimeline.animation) { model.bottomTray = tray }
+    }
+    guard height > 0 else { return }
+    /* Blender keeps its own overlays, such as the navigation gizmo, above the tray. */
+    let top = height - model.safeAreaInsets.bottom - 6 - (tray > 0 ? tray - 8 : 0)
+    WM_apple_ios_ui_bottom_tray_set(tray > 0 ? Float((height - top) / height) : 0)
   }
 }
 

@@ -3,8 +3,16 @@
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
 #import "wm_apple_ios_file_drop.hh"
-#import "wm_apple_ios_platform.hh"
 #import <UniformTypeIdentifiers/UniformTypeIdentifiers.h>
+
+/** Feel that something could not be done; visionOS has no haptics. */
+static void notify_error()
+{
+#if !defined(APPLE_TARGET_VISIONOS)
+  [[[[UINotificationFeedbackGenerator alloc] init] autorelease]
+      notificationOccurred:UINotificationFeedbackTypeError];
+#endif
+}
 
 /* Image formats Blender reads directly. Others, such as HEIC from Photos, are converted to PNG. */
 static NSArray<UTType *> *blenderReadableImageTypes()
@@ -158,7 +166,7 @@ static NSString *fileName(NSString *name, UTType *type, NSUInteger index)
       drop_files(paths, point);
     }
     else {
-      WMIOSNotifyError();
+      notify_error();
     }
   });
   dispatch_release(group);

@@ -737,15 +737,12 @@ extension View {
   }
 }
 
-/** A UIKit panel's glass: `tint` lightens it in light mode on iOS. */
-func makePanelGlass(tint: UIColor? = nil, interactive: Bool = false) -> UIVisualEffect {
+/** Glass for a UIKit view, as SwiftUI's `panelGlass` gives a SwiftUI one. */
+func makePanelGlass() -> UIVisualEffect {
 #if os(visionOS)
   return UIBlurEffect(style: .systemThinMaterial)
 #else
-  let glass = UIGlassEffect(style: .regular)
-  glass.tintColor = tint
-  glass.isInteractive = interactive
-  return glass
+  return UIGlassEffect(style: .regular)
 #endif
 }
 
