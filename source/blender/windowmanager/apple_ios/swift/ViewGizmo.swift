@@ -38,7 +38,7 @@ struct ViewCommand {
   }
 }
 
-/** Where the gizmo and the pie's buttons are, in the window's points. */
+/** Where the gizmo and the pie's buttons are, in the viewport layer's points. */
 struct ViewGizmoGeometry {
   var center: CGPoint
   /** Blender's gizmo, and the larger hotspot around it. */
@@ -148,8 +148,12 @@ struct ViewGizmoHotspotView: UIViewRepresentable {
       self.state = state
     }
 
+    /** In the layer's points, which the pie's buttons are in: the layer sits beside the
+     * window's panels, not at its corner. */
     private func location(_ gesture: UIGestureRecognizer) -> CGPoint {
-      gesture.location(in: nil)
+      let point = gesture.location(in: gesture.view)
+      let origin = state.geometry?.hotspot.origin ?? .zero
+      return CGPoint(x: point.x + origin.x, y: point.y + origin.y)
     }
 
     @objc func pressBegan() {
