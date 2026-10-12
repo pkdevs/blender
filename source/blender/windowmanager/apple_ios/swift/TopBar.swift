@@ -447,6 +447,18 @@ struct DocumentToolbar: ToolbarContent {
     if transformTools.contains(model.activeTool) {
       transformSettings
     }
+    else if model.toolSettingsShown && model.toolStripRoom < 160 {
+      /* No room for the strip beside the other items: all the settings in a popover. */
+      Button("Tool Settings", systemImage: "slider.horizontal.3") { model.toolSettingsOpen = true }
+        .labelStyle(.iconOnly)
+        .frame(width: 44, height: 44)
+        .panelGlass(in: Circle())
+        .popover(isPresented: $model.toolSettingsOpen) {
+          overlay.panels.toolSettingsContent { model.toolSettingsOpen = false }
+        }
+        .background(ToolStripMarker { model.toolStripRoom = $0 })
+        .accessibilityIdentifier("blender.tool-settings.more")
+    }
     else if model.toolSettingsShown {
       toolSettings
     }
@@ -636,6 +648,8 @@ struct ToolStripMarker: UIViewRepresentable {
   func updateUIView(_ marker: Marker, context: Context) {
     marker.changed = changed
     marker.remeasure()
+    /* The bar's items change with an animation: measure again once they are in. */
+    DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [weak marker] in marker?.remeasure() }
   }
 }
 
