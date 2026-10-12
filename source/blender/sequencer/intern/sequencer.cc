@@ -1181,7 +1181,8 @@ static void strip_update_sound_properties(const Depsgraph *depsgraph,
     output_volume *= meta->volume;
   }
   int frame = BKE_sound_scene_audio_frame(depsgraph, scene);
-  if (frame < strip->left_handle() - 2 || frame > strip->right_handle(scene) + 2) {
+  const Bounds<int> sound_frames = sound_bounds_get(scene, strip);
+  if (frame < sound_frames.min - 2 || frame > sound_frames.max + 2) {
     /* Audio of the strip reads values from two frames before its start to two frames after its
      * end (interpolation). Other values are not used, don't store them. */
     frame = -1;

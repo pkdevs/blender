@@ -1058,18 +1058,10 @@ struct SoundAnimationSamples {
   float current_value = 0.0f;
 };
 
-/* Frame range in which a strip can be heard, including interpolation padding. The sequencer
- * computes the audio bounds of strips inside Meta strips separately, but they never exceed the
- * bounds of their Meta strips. */
+/* Frame range in which a strip can be heard, including interpolation padding. */
 static Bounds<int> sound_strip_audible_frames(const Scene *scene, const Strip *strip)
 {
-  const Strip *meta = seq::lookup_meta_by_strip(scene->ed, strip);
-  Bounds<int> frames = meta ? Bounds<int>(meta->left_handle(), meta->right_handle(scene)) :
-                              Bounds<int>(strip->left_handle(), strip->right_handle(scene));
-  for (; meta != nullptr; meta = seq::lookup_meta_by_strip(scene->ed, meta)) {
-    frames.min = std::max(frames.min, meta->left_handle());
-    frames.max = std::min(frames.max, meta->right_handle(scene));
-  }
+  const Bounds<int> frames = seq::sound_bounds_get(scene, strip);
   return {frames.min - 1, frames.max + 1};
 }
 
