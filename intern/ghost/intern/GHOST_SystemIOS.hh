@@ -39,7 +39,8 @@ void GHOST_ios_unregister_window(UIWindow *window);
 @end
 #endif
 
-GHOST_TKey convertKey(int rawCode, uint16_t recvChar, uint16_t /*keyAction*/);
+/** A hardware keyboard key as a GHOST key, see `GHOST_SystemIOS.mm`. */
+GHOST_TKey convertKey(int usage, uint16_t recvChar);
 
 class GHOST_SystemIOS : public GHOST_System {
   struct NativeEvent {

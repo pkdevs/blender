@@ -647,190 +647,170 @@ static GHOST_TButton convertButton(int button)
 }
 
 /**
- * Converts Mac raw-key codes (same for Cocoa & Carbon)
- * into GHOST key codes
- * \param rawCode: The raw physical key code
- * \param recvChar: the character ignoring modifiers (except for shift)
- * \return Ghost key code
+ * Converts a hardware keyboard key into a GHOST key code.
+ * \param usage: The physical key, as a USB HID usage.
+ * \param recvChar: The character the key types ignoring modifiers, 0 for none. Letters and
+ * punctuation follow it, so shortcuts follow the keyboard's layout as on macOS.
  */
-GHOST_TKey convertKey(int rawCode, unichar recvChar, uint16_t /*keyAction*/)
+GHOST_TKey convertKey(int usage, unichar recvChar)
 {
-  switch (rawCode) {
-      /* Numbers keys: mapped to handle some int'l keyboard (e.g. French). */
-      /*
-    case kVK_ISO_Section:
-      return GHOST_kKeyUnknown;
-    case kVK_ANSI_1:
-      return GHOST_kKey1;
-    case kVK_ANSI_2:
-      return GHOST_kKey2;
-    case kVK_ANSI_3:
-      return GHOST_kKey3;
-    case kVK_ANSI_4:
-      return GHOST_kKey4;
-    case kVK_ANSI_5:
-      return GHOST_kKey5;
-    case kVK_ANSI_6:
-      return GHOST_kKey6;
-    case kVK_ANSI_7:
-      return GHOST_kKey7;
-    case kVK_ANSI_8:
-      return GHOST_kKey8;
-    case kVK_ANSI_9:
-      return GHOST_kKey9;
-    case kVK_ANSI_0:
+  if ((recvChar >= 'A') && (recvChar <= 'Z')) {
+    return GHOST_TKey(recvChar - 'A' + GHOST_kKeyA);
+  }
+  if ((recvChar >= 'a') && (recvChar <= 'z')) {
+    return GHOST_TKey(recvChar - 'a' + GHOST_kKeyA);
+  }
+  switch (usage) {
+    case UIKeyboardHIDUsageKeyboard0:
       return GHOST_kKey0;
-
-    case kVK_ANSI_Keypad0:
-      return GHOST_kKeyNumpad0;
-    case kVK_ANSI_Keypad1:
-      return GHOST_kKeyNumpad1;
-    case kVK_ANSI_Keypad2:
-      return GHOST_kKeyNumpad2;
-    case kVK_ANSI_Keypad3:
-      return GHOST_kKeyNumpad3;
-    case kVK_ANSI_Keypad4:
-      return GHOST_kKeyNumpad4;
-    case kVK_ANSI_Keypad5:
-      return GHOST_kKeyNumpad5;
-    case kVK_ANSI_Keypad6:
-      return GHOST_kKeyNumpad6;
-    case kVK_ANSI_Keypad7:
-      return GHOST_kKeyNumpad7;
-    case kVK_ANSI_Keypad8:
-      return GHOST_kKeyNumpad8;
-    case kVK_ANSI_Keypad9:
-      return GHOST_kKeyNumpad9;
-    case kVK_ANSI_KeypadDecimal:
-      return GHOST_kKeyNumpadPeriod;
-    case kVK_ANSI_KeypadEnter:
-      return GHOST_kKeyNumpadEnter;
-    case kVK_ANSI_KeypadPlus:
-      return GHOST_kKeyNumpadPlus;
-    case kVK_ANSI_KeypadMinus:
-      return GHOST_kKeyNumpadMinus;
-    case kVK_ANSI_KeypadMultiply:
-      return GHOST_kKeyNumpadAsterisk;
-    case kVK_ANSI_KeypadDivide:
-      return GHOST_kKeyNumpadSlash;
-    case kVK_ANSI_KeypadClear:
-      return GHOST_kKeyUnknown;
-
-    case kVK_F1:
-      return GHOST_kKeyF1;
-    case kVK_F2:
-      return GHOST_kKeyF2;
-
-    case kVK_F3:
-      return GHOST_kKeyF3;
-    case kVK_F4:
-      return GHOST_kKeyF4;
-    case kVK_F5:
-      return GHOST_kKeyF5;
-    case kVK_F6:
-      return GHOST_kKeyF6;
-    case kVK_F7:
-      return GHOST_kKeyF7;
-    case kVK_F8:
-      return GHOST_kKeyF8;
-    case kVK_F9:
-      return GHOST_kKeyF9;
-    case kVK_F10:
-      return GHOST_kKeyF10;
-    case kVK_F11:
-      return GHOST_kKeyF11;
-    case kVK_F12:
-      return GHOST_kKeyF12;
-    case kVK_F13:
-      return GHOST_kKeyF13;
-    case kVK_F14:
-      return GHOST_kKeyF14;
-    case kVK_F15:
-      return GHOST_kKeyF15;
-    case kVK_F16:
-      return GHOST_kKeyF16;
-    case kVK_F17:
-      return GHOST_kKeyF17;
-    case kVK_F18:
-      return GHOST_kKeyF18;
-    case kVK_F19:
-      return GHOST_kKeyF19;
-    case kVK_F20:
-      return GHOST_kKeyF20;
-
-    case kVK_UpArrow:
-      return GHOST_kKeyUpArrow;
-    case kVK_DownArrow:
-      return GHOST_kKeyDownArrow;
-    case kVK_LeftArrow:
-      return GHOST_kKeyLeftArrow;
-    case kVK_RightArrow:
-      return GHOST_kKeyRightArrow;
-
-    case kVK_Return:
+    case UIKeyboardHIDUsageKeyboardReturnOrEnter:
       return GHOST_kKeyEnter;
-    case kVK_Delete:
-      return GHOST_kKeyBackSpace;
-    case kVK_ForwardDelete:
-      return GHOST_kKeyDelete;
-    case kVK_Escape:
+    case UIKeyboardHIDUsageKeyboardEscape:
       return GHOST_kKeyEsc;
-    case kVK_Tab:
+    case UIKeyboardHIDUsageKeyboardDeleteOrBackspace:
+      return GHOST_kKeyBackSpace;
+    case UIKeyboardHIDUsageKeyboardTab:
       return GHOST_kKeyTab;
-    case kVK_Space:
+    case UIKeyboardHIDUsageKeyboardSpacebar:
       return GHOST_kKeySpace;
-
-    case kVK_Home:
+    case UIKeyboardHIDUsageKeyboardCapsLock:
+      return GHOST_kKeyCapsLock;
+    case UIKeyboardHIDUsageKeyboardPrintScreen:
+      return GHOST_kKeyPrintScreen;
+    case UIKeyboardHIDUsageKeyboardScrollLock:
+      return GHOST_kKeyScrollLock;
+    case UIKeyboardHIDUsageKeyboardPause:
+      return GHOST_kKeyPause;
+    case UIKeyboardHIDUsageKeyboardInsert:
+      return GHOST_kKeyInsert;
+    case UIKeyboardHIDUsageKeyboardHome:
       return GHOST_kKeyHome;
-    case kVK_End:
-      return GHOST_kKeyEnd;
-    case kVK_PageUp:
+    case UIKeyboardHIDUsageKeyboardPageUp:
       return GHOST_kKeyUpPage;
-    case kVK_PageDown:
+    case UIKeyboardHIDUsageKeyboardDeleteForward:
+      return GHOST_kKeyDelete;
+    case UIKeyboardHIDUsageKeyboardEnd:
+      return GHOST_kKeyEnd;
+    case UIKeyboardHIDUsageKeyboardPageDown:
       return GHOST_kKeyDownPage;
-
-       */
-
-    default: {
-      /* Alphanumerical or punctuation key that is remappable in int'l keyboards. */
-      if ((recvChar >= 'A') && (recvChar <= 'Z')) {
-        return (GHOST_TKey)(recvChar - 'A' + GHOST_kKeyA);
-      }
-      else if ((recvChar >= 'a') && (recvChar <= 'z')) {
-        return (GHOST_TKey)(recvChar - 'a' + GHOST_kKeyA);
-      }
-      else {
-
-        switch (recvChar) {
-          case '-':
-            return GHOST_kKeyMinus;
-          case '+':
-            return GHOST_kKeyPlus;
-          case '=':
-            return GHOST_kKeyEqual;
-          case ',':
-            return GHOST_kKeyComma;
-          case '.':
-            return GHOST_kKeyPeriod;
-          case '/':
-            return GHOST_kKeySlash;
-          case ';':
-            return GHOST_kKeySemicolon;
-          case '\'':
-            return GHOST_kKeyQuote;
-          case '\\':
-            return GHOST_kKeyBackslash;
-          case '[':
-            return GHOST_kKeyLeftBracket;
-          case ']':
-            return GHOST_kKeyRightBracket;
-          case '`':
-            return GHOST_kKeyAccentGrave;
-          default:
-            return GHOST_kKeyUnknown;
-        }
-      }
-    }
+    case UIKeyboardHIDUsageKeyboardRightArrow:
+      return GHOST_kKeyRightArrow;
+    case UIKeyboardHIDUsageKeyboardLeftArrow:
+      return GHOST_kKeyLeftArrow;
+    case UIKeyboardHIDUsageKeyboardDownArrow:
+      return GHOST_kKeyDownArrow;
+    case UIKeyboardHIDUsageKeyboardUpArrow:
+      return GHOST_kKeyUpArrow;
+    case UIKeyboardHIDUsageKeypadNumLock:
+      return GHOST_kKeyNumLock;
+    case UIKeyboardHIDUsageKeypadSlash:
+      return GHOST_kKeyNumpadSlash;
+    case UIKeyboardHIDUsageKeypadAsterisk:
+      return GHOST_kKeyNumpadAsterisk;
+    case UIKeyboardHIDUsageKeypadHyphen:
+      return GHOST_kKeyNumpadMinus;
+    case UIKeyboardHIDUsageKeypadPlus:
+      return GHOST_kKeyNumpadPlus;
+    case UIKeyboardHIDUsageKeypadEnter:
+      return GHOST_kKeyNumpadEnter;
+    case UIKeyboardHIDUsageKeypad0:
+      return GHOST_kKeyNumpad0;
+    case UIKeyboardHIDUsageKeypadPeriod:
+      return GHOST_kKeyNumpadPeriod;
+    case UIKeyboardHIDUsageKeyboardNonUSBackslash:
+      return GHOST_kKeyGrLess;
+    case UIKeyboardHIDUsageKeyboardApplication:
+      return GHOST_kKeyApp;
+    case UIKeyboardHIDUsageKeyboardLeftControl:
+      return GHOST_kKeyLeftControl;
+    case UIKeyboardHIDUsageKeyboardLeftShift:
+      return GHOST_kKeyLeftShift;
+    case UIKeyboardHIDUsageKeyboardLeftAlt:
+      return GHOST_kKeyLeftAlt;
+    case UIKeyboardHIDUsageKeyboardLeftGUI:
+      return GHOST_kKeyLeftOS;
+    case UIKeyboardHIDUsageKeyboardRightControl:
+      return GHOST_kKeyRightControl;
+    case UIKeyboardHIDUsageKeyboardRightShift:
+      return GHOST_kKeyRightShift;
+    case UIKeyboardHIDUsageKeyboardRightAlt:
+      return GHOST_kKeyRightAlt;
+    case UIKeyboardHIDUsageKeyboardRightGUI:
+      return GHOST_kKeyRightOS;
+    default:
+      break;
+  }
+  if (usage >= UIKeyboardHIDUsageKeyboard1 && usage <= UIKeyboardHIDUsageKeyboard9) {
+    return GHOST_TKey(usage - UIKeyboardHIDUsageKeyboard1 + GHOST_kKey1);
+  }
+  if (usage >= UIKeyboardHIDUsageKeypad1 && usage <= UIKeyboardHIDUsageKeypad9) {
+    return GHOST_TKey(usage - UIKeyboardHIDUsageKeypad1 + GHOST_kKeyNumpad1);
+  }
+  if (usage >= UIKeyboardHIDUsageKeyboardF1 && usage <= UIKeyboardHIDUsageKeyboardF12) {
+    return GHOST_TKey(usage - UIKeyboardHIDUsageKeyboardF1 + GHOST_kKeyF1);
+  }
+  if (usage >= UIKeyboardHIDUsageKeyboardF13 && usage <= UIKeyboardHIDUsageKeyboardF24) {
+    return GHOST_TKey(usage - UIKeyboardHIDUsageKeyboardF13 + GHOST_kKeyF13);
+  }
+  /* Punctuation by what it types, so it follows the layout as letters do. */
+  switch (recvChar) {
+    case '-':
+      return GHOST_kKeyMinus;
+    case '+':
+      return GHOST_kKeyPlus;
+    case '=':
+      return GHOST_kKeyEqual;
+    case ',':
+      return GHOST_kKeyComma;
+    case '.':
+      return GHOST_kKeyPeriod;
+    case '/':
+      return GHOST_kKeySlash;
+    case ';':
+      return GHOST_kKeySemicolon;
+    case '\'':
+      return GHOST_kKeyQuote;
+    case '\\':
+      return GHOST_kKeyBackslash;
+    case '[':
+      return GHOST_kKeyLeftBracket;
+    case ']':
+      return GHOST_kKeyRightBracket;
+    case '`':
+      return GHOST_kKeyAccentGrave;
+    default:
+      break;
+  }
+  /* Otherwise the key's position on a US keyboard. */
+  switch (usage) {
+    case UIKeyboardHIDUsageKeyboardHyphen:
+      return GHOST_kKeyMinus;
+    case UIKeyboardHIDUsageKeyboardEqualSign:
+      return GHOST_kKeyEqual;
+    case UIKeyboardHIDUsageKeyboardOpenBracket:
+      return GHOST_kKeyLeftBracket;
+    case UIKeyboardHIDUsageKeyboardCloseBracket:
+      return GHOST_kKeyRightBracket;
+    case UIKeyboardHIDUsageKeyboardBackslash:
+    case UIKeyboardHIDUsageKeyboardNonUSPound:
+      return GHOST_kKeyBackslash;
+    case UIKeyboardHIDUsageKeyboardSemicolon:
+      return GHOST_kKeySemicolon;
+    case UIKeyboardHIDUsageKeyboardQuote:
+      return GHOST_kKeyQuote;
+    case UIKeyboardHIDUsageKeyboardGraveAccentAndTilde:
+      return GHOST_kKeyAccentGrave;
+    case UIKeyboardHIDUsageKeyboardComma:
+      return GHOST_kKeyComma;
+    case UIKeyboardHIDUsageKeyboardPeriod:
+      return GHOST_kKeyPeriod;
+    case UIKeyboardHIDUsageKeyboardSlash:
+      return GHOST_kKeySlash;
+    default:
+      break;
+  }
+  if (usage >= UIKeyboardHIDUsageKeyboardA && usage <= UIKeyboardHIDUsageKeyboardZ) {
+    return GHOST_TKey(usage - UIKeyboardHIDUsageKeyboardA + GHOST_kKeyA);
   }
   return GHOST_kKeyUnknown;
 }
