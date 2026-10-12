@@ -403,6 +403,13 @@ struct DocumentToolbar: ToolbarContent {
     }
   }
 
+  /** A panel in the sidebar menu, with Blender's icon for its editor. */
+  private func sidebarToggle(_ title: String, icon: UIImage?, isOn: Bool, toggle: @escaping () -> Void) -> some View {
+    Toggle(isOn: Binding(get: { isOn }, set: { _ in toggle() })) {
+      Label { Text(title) } icon: { iconImage(icon) }
+    }
+  }
+
   private var undoButton: some View {
     Button { Engine.operatorCall("ED_OT_undo") } label: {
       Label { Text("Undo") } icon: { iconImage(wm_apple_ios_icon("operator.ED_OT_undo", "arrow.uturn.backward")) }
@@ -414,12 +421,14 @@ struct DocumentToolbar: ToolbarContent {
   /** The sidebar: its menu chooses what shows beside and below the viewport. */
   private var sidebarMenu: some View {
     Menu {
-      Toggle("Outliner", systemImage: "list.bullet.indent", isOn: Binding(
-        get: { model.hierarchyShown }, set: { _ in shell.panels.toggleHierarchy() }))
-      Toggle("Timeline", systemImage: "timeline.selection", isOn: Binding(
-        get: { model.timelineShown }, set: { _ in shell.timeline.toggle() }))
-      Toggle("Asset Browser", systemImage: "square.grid.2x2", isOn: Binding(
-        get: { model.assetsShown }, set: { _ in shell.assets.toggle() }))
+      sidebarToggle("Outliner", icon: BlenderIcon.image("OUTLINER"), isOn: model.hierarchyShown) {
+        shell.panels.toggleHierarchy()
+      }
+      sidebarToggle("Timeline", icon: UIImage(named: "blender.time")?.withRenderingMode(.alwaysTemplate),
+                    isOn: model.timelineShown) { shell.timeline.toggle() }
+      sidebarToggle("Asset Browser", icon: BlenderIcon.image("ASSET_MANAGER"), isOn: model.assetsShown) {
+        shell.assets.toggle()
+      }
     } label: {
       Label("Sidebar", systemImage: "sidebar.leading")
     }
