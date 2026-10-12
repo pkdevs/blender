@@ -189,6 +189,8 @@ typedef struct UserInputEvent {
   uint64_t orbit_gesture_id;
 
   /* Keyboard handling. */
+  /** Text is edited by Blender from hardware key events, not in #text_field. */
+  bool hardware_text_edit;
   UITextField *text_field;
   NSString *original_text;
   bool onscreen_keyboard_active;

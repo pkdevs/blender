@@ -1716,6 +1716,12 @@ UIWindow *document_window = nil;
 {
   @synchronized(self) {
     IOS_INPUT_LOG(@"Keyboard popup request received %@", text_field.text);
+    /* With a hardware keyboard Blender edits the text itself from key events, as on the
+     * desktop; #getLastKeyboardString then has nothing to replace it with. */
+    hardware_text_edit = [GCKeyboard coalescedKeyboard] != nil;
+    if (hardware_text_edit) {
+      return GHOST_kSuccess;
+    }
     [self setupKeyboard:keyboard_properties];
 
     if (!onscreen_keyboard_active) {
@@ -1775,6 +1781,9 @@ UIWindow *document_window = nil;
 {
   /* Lock access around keyboard handling events */
   @synchronized(self) {
+    if (hardware_text_edit) {
+      return nullptr;
+    }
 
     /* Update text string if one exists */
     if (text_field.text && ![text_field.text isEqualToString:@""]) {

@@ -3730,7 +3730,8 @@ static void ui_textedit_end(bContext *C, Button *but, HandleButtonData *data)
    * text is tricky on iOS since you also need to take into account cuts, pastes and
    * any other editing you can do with an iOS keyboard
    */
-  if (but) {
+  /* Null when a hardware keyboard edited the text through Blender's own events. */
+  if (but && keyboard_string) {
     ui_textedit_string_set(but, but->active->text_edit, keyboard_string);
   }
 #endif
