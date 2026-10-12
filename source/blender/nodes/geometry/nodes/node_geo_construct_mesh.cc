@@ -245,7 +245,7 @@ static Mesh *create_mesh_from_lists(const List<float3> &positions_list,
 static void node_geo_exec(GeoNodeExecParams params)
 {
   const GListPtr positions_list = params.extract_input<GListPtr>("Positions"_ustr);
-  if (!positions_list) {
+  if (!positions_list || positions_list->size() == 0) {
     params.set_default_remaining_outputs();
     return;
   }
