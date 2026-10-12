@@ -54,17 +54,6 @@ inline void execute_element_fn_as_multi_function(const ElementFn &element_fn,
       }()...);
 }
 
-template<typename ElementFn, typename ExecPreset, typename... ParamTags>
-inline void execute_element_fn_as_multi_function(const ElementFn &element_fn,
-                                                 const ExecPreset exec_preset,
-                                                 const IndexMask &mask,
-                                                 Params params,
-                                                 TypeSequence<ParamTags...> param_tags)
-{
-  execute_element_fn_as_multi_function(
-      element_fn, exec_preset, mask, params, param_tags, std::index_sequence_for<ParamTags...>());
-}
-
 /**
  * `element_fn` is expected to return nothing and to have the following parameters:
  * - For single-inputs: const value or reference.
@@ -78,8 +67,12 @@ inline auto build_multi_function_call_from_element_fn(ElementFn &&element_fn,
 {
   return [element_fn = std::forward<ElementFn>(element_fn), exec_preset](const IndexMask &mask,
                                                                          Params params) {
-    execute_element_fn_as_multi_function(
-        element_fn, exec_preset, mask, params, TypeSequence<ParamTags...>());
+    execute_element_fn_as_multi_function(element_fn,
+                                         exec_preset,
+                                         mask,
+                                         params,
+                                         TypeSequence<ParamTags...>(),
+                                         std::index_sequence_for<ParamTags...>());
   };
 }
 
