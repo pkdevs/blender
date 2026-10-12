@@ -15,8 +15,14 @@
 namespace blender::noise {
 
 void hash_float_to_float(const IndexMask &mask,
+                         const VArray<float> &ks,
+                         MutableSpan<float> r_values);
+void hash_float_to_float(const IndexMask &mask,
                          const VArray<float3> &ks,
                          MutableSpan<float> r_values);
+void hash_float_to_color(const IndexMask &mask,
+                         const VArray<float> &ks,
+                         MutableSpan<ColorGeometry4f> r_values);
 void hash_float_to_color(const IndexMask &mask,
                          const VArray<float3> &ks,
                          MutableSpan<ColorGeometry4f> r_values);

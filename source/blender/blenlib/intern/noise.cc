@@ -95,7 +95,7 @@ BLI_INLINE void hash_bit_final(uint32_t &a, uint32_t &b, uint32_t &c)
   c -= hash_bit_rotate(b, 24);
 }
 
-uint32_t hash(uint32_t kx)
+ATTR_ALWAYS_INLINE_EMIT uint32_t hash(uint32_t kx)
 {
   uint32_t a, b, c;
   a = b = c = 0xdeadbeef + (1 << 2) + 13;
@@ -201,7 +201,7 @@ static inline int4 hash_pcg4d_i(int4 v)
   return v;
 }
 
-uint32_t hash_float(float kx)
+ATTR_ALWAYS_INLINE_EMIT uint32_t hash_float(float kx)
 {
   return hash(float_as_uint(kx));
 }
@@ -255,7 +255,7 @@ float hash_to_float(uint32_t kx, uint32_t ky, uint32_t kz, uint32_t kw)
 
 /* Hashing a number of floats into a float in the range [0, 1]. */
 
-float hash_float_to_float(float k)
+ATTR_ALWAYS_INLINE_EMIT float hash_float_to_float(float k)
 {
   return uint_to_float_01(hash_float(k));
 }
@@ -292,7 +292,7 @@ float2 hash_float_to_float2(float4 k)
                 hash_float_to_float(float4(k.z, k.x, k.w, k.y)));
 }
 
-float3 hash_float_to_float3(float k)
+ATTR_ALWAYS_INLINE_EMIT float3 hash_float_to_float3(float k)
 {
   return float3(hash_float_to_float(k),
                 hash_float_to_float(float2(k, 1.0)),
@@ -2591,6 +2591,18 @@ void gabor(const float3 coordinates,
  */
 
 void hash_float_to_float(const IndexMask &mask,
+                         const VArray<float> &ks,
+                         MutableSpan<float> r_values)
+{
+  varray_exec::execute_1in_1out_uninitialized(
+      mask,
+      ks,
+      r_values,
+      [](const float &k) { return hash_float_to_float(k); },
+      varray_exec::exec_presets::MaterializeOptimize());
+}
+
+void hash_float_to_float(const IndexMask &mask,
                          const VArray<float3> &ks,
                          MutableSpan<float> r_values)
 {
@@ -2611,6 +2623,21 @@ void hash_float2_to_float(const IndexMask &mask,
       ks,
       r_values,
       [](const float3 &k) { return hash_float_to_float(float2(k.x, k.y)); },
+      varray_exec::exec_presets::MaterializeOptimize());
+}
+
+void hash_float_to_color(const IndexMask &mask,
+                         const VArray<float> &ks,
+                         MutableSpan<ColorGeometry4f> r_values)
+{
+  varray_exec::execute_1in_1out_uninitialized(
+      mask,
+      ks,
+      r_values,
+      [](const float &k) {
+        const float3 c = hash_float_to_float3(k);
+        return ColorGeometry4f(c[0], c[1], c[2], 1.0f);
+      },
       varray_exec::exec_presets::MaterializeOptimize());
 }
 
