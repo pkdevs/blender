@@ -286,29 +286,24 @@ struct OutlineList: View {
     Set(nodes.filter { $0.string("kind") == "object" && $0.bool("selected") }.compactMap { $0.string("key") })
   }
 
-  /** The rows in outline order, without those under closed rows; a search shows its matches. */
-  private var rows: [JSON] {
+  /** Each row's children, in outline order; a search keeps its matches and their parents. */
+  private var children: [String: [JSON]] {
+    var result: [String: [JSON]] = [:]
     let nodes = store.visible
-    guard store.query.isEmpty else { return nodes }
-    var hiddenUnder: [String] = []
-    return nodes.filter { node in
-      let key = node.keyString
-      if hiddenUnder.contains(where: { key.hasPrefix($0 + "/") }) { return false }
-      if collapsed.contains(key) { hiddenUnder.append(key) }
-      return true
+    let keys = Set(nodes.map(\.keyString))
+    for node in nodes {
+      let parent = node.string("parent") ?? ""
+      result[keys.contains(parent) ? parent : "", default: []].append(node)
     }
+    return result
   }
 
   var body: some View {
+    let children = self.children
     ScrollView {
       LazyVStack(spacing: 2) {
-        ForEach(rows, id: \.keyString) { node in
-          SwipeRow(id: node.keyString, swiped: $swiped, offset: $swipeOffset,
-                   leading: swipeActions(node, ["duplicate", "rename"]),
-                   trailing: swipeActions(node, ["visibility", "delete"])) {
-            row(node)
-          }
-          .transition(.opacity)
+        ForEach(children[""] ?? [], id: \.keyString) { node in
+          branch(node, children)
         }
       }
       .padding(.horizontal, 8)
@@ -321,6 +316,33 @@ struct OutlineList: View {
     .onReceive(store.$nodes) { nodes in selection = Self.selected(nodes) }
     .onChange(of: store.editing) { closeSwipe() }
     .accessibilityIdentifier("blender.hierarchy.outline")
+  }
+
+  /** A row and the rows under it, which slide out from under it as it opens, clipped so they
+   * never pass over it, as the Properties panels' sections do. */
+  private func branch(_ node: JSON, _ children: [String: [JSON]]) -> AnyView {
+    let key = node.keyString
+    let open = !store.query.isEmpty || !collapsed.contains(key)
+    return AnyView(VStack(spacing: 2) {
+      SwipeRow(id: key, swiped: $swiped, offset: $swipeOffset,
+               leading: swipeActions(node, ["duplicate", "rename"]),
+               trailing: swipeActions(node, ["visibility", "delete"])) {
+        row(node)
+      }
+      .zIndex(1)
+      VStack(spacing: 2) {
+        if open, let rows = children[key] {
+          VStack(spacing: 2) {
+            ForEach(rows, id: \.keyString) { child in
+              branch(child, children)
+            }
+          }
+          .transition(.opacity.combined(with: .move(edge: .top)))
+        }
+      }
+      .frame(maxWidth: .infinity, alignment: .top)
+      .clipped()
+    })
   }
 
   private var animation: Animation? { UIAccessibility.isReduceMotionEnabled ? nil : .smooth(duration: 0.25) }
