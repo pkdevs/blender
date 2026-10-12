@@ -102,16 +102,15 @@ struct PanoramicFootprint {
   ePanoramicFace view_id;
   float2 film_co;
   float2 render_co;
-  float2 stride;
+  /* Symmetric matrix (xx, xy, yy) spacing the gathered samples in render pixels. */
+  float3 spacing;
   /* Rows of the render to film pixel offset matrix. */
   float2 film_from_render_x;
   float2 film_from_render_y;
-  /* Symmetric matrix (xx, xy, yy) used to measure film offsets for the filter weights. */
-  float3 film_metric;
   /* False where the mapping is degenerate, then use nearest sample. */
   bool is_valid;
-  /* Pixel center is outside the lens but its filter still overlaps it. */
-  bool is_outside_lens;
+  /* Part of the pixel filter that is inside the lens. */
+  float lens_coverage;
 };
 
 float display_depth_amend(float depth)
@@ -306,36 +305,54 @@ struct Film {
     return axis;
   }
 
-  /* The projection is undefined for pixels outside the lens, but their filter can still overlap
-   * it. Find a nearby position inside the lens to evaluate the projection from. */
-  bool panoramic_find_closest_lens_co(float2 film_co, float2 &lens_co)
+  /* Returns false if the lens border is further than the filter radius. */
+  bool panoramic_find_closest_lens_border(float2 film_co, float2 &border_co)
   {
-    /* Search a bit further than the filter radius to not miss a lens border in between the 8
-     * directions. */
-    const float distance = uniforms.uniform_buf.film.filter_radius * 1.1f + 0.75f;
-    for (int i = 0; i < 8; i++) {
-      const float angle = float(i) * M_PI_2 + ((i < 4) ? 0.0f : M_PI_4);
-      lens_co = film_co + float2(cos(angle), sin(angle)) * distance;
-      if (!is_zero(panoramic_direction_get(lens_co))) {
-        /* Move close to the pixel. */
-        float2 outside_co = film_co;
-        for (int j = 0; j < 4; j++) {
-          const float2 middle_co = 0.5f * (outside_co + lens_co);
-          if (is_zero(panoramic_direction_get(middle_co))) {
-            outside_co = middle_co;
+    const bool is_outside = is_zero(panoramic_direction_get(film_co));
+    const float radius = uniforms.uniform_buf.film.filter_radius;
+    /* Inverse of the distance to the border along each film axis. */
+    float2 intercept_inv = float2(0.0f);
+    for (int i = 0; i < 4; i++) {
+      const float angle = float(i) * M_PI_2;
+      const float2 direction = float2(cos(angle), sin(angle));
+      float distance_min = 0.0f;
+      /* Far enough to cross any border closer than the filter radius. */
+      float distance_max = radius * M_SQRT2;
+      if (is_zero(panoramic_direction_get(film_co + direction * distance_max)) != is_outside) {
+        for (int j = 0; j < 8; j++) {
+          const float middle = 0.5f * (distance_min + distance_max);
+          if (is_zero(panoramic_direction_get(film_co + direction * middle)) == is_outside) {
+            distance_min = middle;
           }
           else {
-            lens_co = middle_co;
+            distance_max = middle;
           }
         }
-        return true;
+        intercept_inv += direction * 2.0f / (distance_min + distance_max);
       }
     }
-    return false;
+    if (is_zero(intercept_inv)) {
+      return false;
+    }
+    /* Closest point on the line going through both intersections with the border. */
+    const float2 border_offset = intercept_inv / length_squared(intercept_inv);
+    border_co = film_co + border_offset;
+    return length_squared(border_offset) < square(radius);
+  }
+
+  /* Returns the part of the pixel filter that is inside the lens.
+   * `border_distance` is signed distance to the lens border, positive if inside the lens. */
+  float panoramic_lens_coverage(float border_distance)
+  {
+    /* Standard deviation of the filter (see `film_filter_weight`). */
+    const float sigma = 0.284f * uniforms.uniform_buf.film.filter_radius;
+    /* Approximation of the normal cumulative distribution function. */
+    const float falloff = exp(-2.0f * M_1_PI * square(border_distance / sigma));
+    return 0.5f + 0.5f * sign(border_distance) * sqrt(1.0f - falloff);
   }
 
   /* `lens_co` is where the projection is evaluated. It is the pixel center unless the pixel is
-   * outside the lens (see `panoramic_find_closest_lens_co`). It must be owned by `view_id`. */
+   * outside the lens (see `panoramic_find_closest_lens_border`). It must be owned by `view_id`. */
   PanoramicFootprint panoramic_footprint_get(int2 texel_film,
                                              float2 lens_co,
                                              bool is_outside_lens,
@@ -343,14 +360,20 @@ struct Film {
   {
     PanoramicFootprint footprint;
     footprint.view_id = view_id;
-    footprint.is_outside_lens = is_outside_lens;
     footprint.film_co = float2(texel_film) + 0.5f;
     footprint.render_co = float2(0.0f);
-    footprint.stride = float2(1.0f);
+    footprint.spacing = float3(1.0f, 0.0f, 1.0f);
     footprint.film_from_render_x = float2(1.0f, 0.0f);
     footprint.film_from_render_y = float2(0.0f, 1.0f);
-    footprint.film_metric = float3(1.0f, 0.0f, 1.0f);
     footprint.is_valid = false;
+    footprint.lens_coverage = 1.0f;
+
+    float2 border_co;
+    if (panoramic_find_closest_lens_border(footprint.film_co, border_co)) {
+      const float border_distance = distance(footprint.film_co, border_co);
+      footprint.lens_coverage = panoramic_lens_coverage(is_outside_lens ? -border_distance :
+                                                                          border_distance);
+    }
 
     panoramic_render_co_get(lens_co, view_id, footprint.render_co);
 
@@ -359,57 +382,50 @@ struct Film {
         lens_co, footprint.render_co, float2(1.0f, 0.0f), view_id);
     const float2 dy = panoramic_render_co_derivative(
         lens_co, footprint.render_co, float2(0.0f, 1.0f), view_id);
-    /* Extrapolate to the pixel center. */
-    const float2 lens_offset = footprint.film_co - lens_co;
-    footprint.render_co += dx * lens_offset.x + dy * lens_offset.y;
     const float determinant = dx.x * dy.y - dy.x * dx.y;
-    /* Lower bound of the render pixel density in the most stretched direction. */
-    const float min_density = abs(determinant) *
-                              inversesqrt(length_squared(dx) + length_squared(dy));
-    if (!(min_density > 0.02f)) {
+    /* The footprint of a film pixel on the subview is an ellipse.
+     * Its squared axis lengths are the eigenvalues of this matrix times its transpose
+     * `(xx, xy, yy)`. */
+    const float xx = dx.x * dx.x + dy.x * dy.x;
+    const float xy = dx.x * dx.y + dy.x * dy.y;
+    const float yy = dx.y * dx.y + dy.y * dy.y;
+    const float mean = 0.5f * (xx + yy);
+    const float deviation = sqrt(square(0.5f * (xx - yy)) + square(xy));
+    const float size_max_sqr = mean + deviation;
+    const float size_min_sqr = square(determinant) / size_max_sqr;
+    if (!(size_min_sqr > square(0.02f))) {
       return footprint;
     }
     footprint.is_valid = true;
-    {
-      /* Widen the filter where the render pixel density is below this value.
-       * Note(L3GiaBao): I tested different values and this seems to be most acceptable. */
-      const float density_ref = 0.45f;
-      /* Squared density matrix. Its eigenvalues are `mean +- deviation`. */
-      const float xx = length_squared(dx);
-      const float xy = dot(dx, dy);
-      const float yy = length_squared(dy);
-      const float mean = 0.5f * (xx + yy);
-      const float deviation = sqrt(square(0.5f * (xx - yy)) + square(xy));
-      /* Widen sooner if samples are skipped in the other direction (e.g. mirror ball border). */
-      const float density_ref_min = min(density_ref * max(sqrt(mean + deviation), 1.0f), 1.0f);
-      const float density_max = min((mean + deviation) / square(density_ref), 1.0f);
-      const float density_min = min((mean - deviation) / square(density_ref_min), 1.0f);
-      /* Direction of lowest density. */
-      float2 axis = (xx < yy) ? float2(1.0f, 0.0f) : float2(0.0f, 1.0f);
-      if (abs(xy) > 1e-6f * mean) {
-        axis = normalize(float2(xy, (mean - deviation) - xx));
-      }
-      const float delta = density_min - density_max;
-      footprint.film_metric = float3(density_max + delta * axis.x * axis.x,
-                                     delta * axis.x * axis.y,
-                                     density_max + delta * axis.y * axis.y);
-    }
+    /* Extrapolate to the pixel center. */
+    const float2 lens_offset = footprint.film_co - lens_co;
+    footprint.render_co += dx * lens_offset.x + dy * lens_offset.y;
     footprint.film_from_render_x = float2(dy.y, -dy.x) / determinant;
     footprint.film_from_render_y = float2(-dx.y, dx.x) / determinant;
-    /* At least one pixel to avoid gathering the same sample twice. Clamp because the
-     * footprint is only valid close to the pixel center. */
-    footprint.stride = clamp(float2(length(float2(dx.x, dy.x)), length(float2(dx.y, dy.y))),
-                             float2(1.0f),
-                             float2(16.0f));
+    /* Direction of the longest footprint axis. */
+    float2 axis = (xx > yy) ? float2(1.0f, 0.0f) : float2(0.0f, 1.0f);
+    if (abs(xy) > 1e-6f * mean) {
+      axis = normalize(float2(xy, size_max_sqr - xx));
+    }
+    /* Samples spacing along the footprint axes.
+     * Clamp because the footprint is only valid close to the pixel center. */
+    const float spacing_max = clamp(sqrt(size_max_sqr), 1.0f, 32.0f);
+    const float spacing_min = clamp(sqrt(size_min_sqr), 1.0f, 32.0f);
+    const float delta = spacing_max - spacing_min;
+    footprint.spacing = float3(spacing_min + delta * axis.x * axis.x,
+                               delta * axis.x * axis.y,
+                               spacing_min + delta * axis.y * axis.y);
     return footprint;
   }
 
-  float panoramic_film_distance_sqr(PanoramicFootprint footprint, float2 film_offset)
+  float panoramic_filter_weight(float2 film_offset)
   {
-    const float3 metric = footprint.film_metric;
-    return metric.x * film_offset.x * film_offset.x +
-           2.0f * metric.y * film_offset.x * film_offset.y +
-           metric.z * film_offset.y * film_offset.y;
+    const float distance_sqr = length_squared(film_offset);
+    /* Ensure a minimum weight to avoid missing data when no sample is inside the filter radius.
+     * Decrease it with distance to bias towards the closest samples. */
+    const float weight_min = 1e-8f / square(square(1.0f + distance_sqr));
+    return max(weight_min,
+               film_filter_weight(uniforms.uniform_buf.film.filter_radius, distance_sqr));
   }
 
   float2 panoramic_film_offset_get(PanoramicFootprint footprint, float2 render_offset)
@@ -418,17 +434,12 @@ struct Film {
                   dot(footprint.film_from_render_y, render_offset));
   }
 
-  /* `outside_weight` is the weight of the sample landing outside the lens. It is needed to fade
-   * the image at the lens border. */
-  FilmSample panoramic_sample_get(int sample_n,
-                                  PanoramicFootprint footprint,
-                                  float &outside_weight)
+  FilmSample panoramic_sample_get(int sample_n, PanoramicFootprint footprint)
   {
     FilmSample film_sample;
     film_sample.texel = int2(0);
     film_sample.weight = 0.0f;
     film_sample.weight_sum_inv = 0.0f;
-    outside_weight = 0.0f;
 
     const FilmSample cpu_sample = uniforms.uniform_buf.film.samples[sample_n];
     if (cpu_sample.weight == 0.0f) {
@@ -444,10 +455,12 @@ struct Film {
       }
       return film_sample;
     }
-    /* Stretch the sample pattern over the footprint. Randomize to visit the skipped pixels. */
+    /* Stretch the sampling pattern over the footprint. Randomize to visit the skipped pixels. */
     const float2 random_offset = sampling.rng_2D_get(SAMPLING_LENS_U) - 0.5f;
-    const float2 sample_co = footprint.render_co + float2(cpu_sample.texel) * footprint.stride +
-                             random_offset * (footprint.stride - 1.0f);
+    const float2 tap = float2(cpu_sample.texel) + random_offset;
+    const float3 spacing = footprint.spacing;
+    const float2 sample_co = footprint.render_co - random_offset +
+                             float2(dot(spacing.xy, tap), dot(spacing.yz, tap));
     /* Render pixel with the closest sample. */
     film_sample.texel = int2(floor(sample_co + subpixel_offset));
     if (any(lessThan(film_sample.texel, int2(0))) ||
@@ -457,44 +470,26 @@ struct Film {
     }
     else {
       const float2 render_co = float2(film_sample.texel) + 0.5f - subpixel_offset;
-      /* Linear estimate of the sample position on the film. */
+      /* Linear approximation of the sample position on the film. */
       float2 film_offset = panoramic_film_offset_get(footprint, render_co - footprint.render_co);
       float2 estimate_render_co;
-      if (is_zero(panoramic_direction_get(footprint.film_co + film_offset))) {
-        outside_weight = film_filter_weight(uniforms.uniform_buf.film.filter_radius,
-                                            panoramic_film_distance_sqr(footprint, film_offset));
-      }
-      else if (panoramic_render_co_get(
-                   footprint.film_co + film_offset, footprint.view_id, estimate_render_co))
+      if (panoramic_render_co_get(
+              footprint.film_co + film_offset, footprint.view_id, estimate_render_co))
       {
-        /* Project the estimate back to refine it. Reject the sample if it's too far off. */
+        /* Project the approximation back to refine it. Discard the sample if it's too far off. */
         const float2 correction = panoramic_film_offset_get(footprint,
                                                             render_co - estimate_render_co);
-        if (panoramic_film_distance_sqr(footprint, correction) < square(1.5f)) {
+        if (length_squared(correction) < square(1.5f)) {
           film_offset += correction;
-          film_sample.weight = film_filter_weight(
-              uniforms.uniform_buf.film.filter_radius,
-              panoramic_film_distance_sqr(footprint, film_offset));
+          film_sample.weight = panoramic_filter_weight(film_offset);
         }
       }
     }
     if (sample_n == 0) {
-      if (footprint.is_outside_lens) {
-        /* Avoid a null total weight. */
-        outside_weight = max(outside_weight, 1e-8f);
-      }
-      else {
-        /* Minimum weight to avoid missing data where the render pixel density is low. */
-        film_sample.weight = max(film_sample.weight, 1e-8f);
-      }
+      /* Avoid a null total weight when all samples are discarded. */
+      film_sample.weight = max(film_sample.weight, 1e-20f);
     }
     return film_sample;
-  }
-
-  FilmSample panoramic_sample_get(int sample_n, PanoramicFootprint footprint)
-  {
-    float outside_weight;
-    return panoramic_sample_get(sample_n, footprint, outside_weight);
   }
 
   ePanoramicFace panoramic_view_id_get()
@@ -567,16 +562,14 @@ struct Film {
   }
 
   /* Returns the combined weights of all samples affecting this film pixel.
-   * `outside_weight` comes from outside the lens. */
+   * `outside_weight` is the weight of the filter part outside the lens. */
   float weight_accumulation(PanoramicFootprint panoramic_footprint, float &outside_weight)
   {
     float weight = 0.0f;
-    outside_weight = 0.0f;
     for (int i = 0; i < samples_len; i++) {
-      float sample_outside_weight;
-      weight += panoramic_sample_get(i, panoramic_footprint, sample_outside_weight).weight;
-      outside_weight += sample_outside_weight;
+      weight += panoramic_sample_get(i, panoramic_footprint).weight;
     }
+    outside_weight = weight * (1.0f / panoramic_footprint.lens_coverage - 1.0f);
     return weight + outside_weight;
   }
 
@@ -1252,13 +1245,16 @@ struct Film {
       float3 camera_direction = panoramic_direction_get(texel_film);
       if (is_zero(camera_direction)) {
         panoramic_is_outside_lens = true;
-        if (!panoramic_find_closest_lens_co(float2(texel_film) + 0.5f, panoramic_lens_co)) {
+        float2 border_co;
+        if (!panoramic_find_closest_lens_border(panoramic_lens_co, border_co)) {
           /* No subview owns this texel under the current projection at all (e.g. outside the
            * fisheye lens). Clear it instead of copying stale data. */
           clear_history(texel_film, out_color, out_depth);
           return;
         }
-        /* Use the subview that owns the closest lens position. */
+        /* Use the subview that owns the closest lens position. Step inside the lens as
+         * projection is undefined on the border. */
+        panoramic_lens_co = border_co + normalize(border_co - panoramic_lens_co) * 0.05f;
         camera_direction = panoramic_direction_get(panoramic_lens_co);
       }
       if (!panoramic_texel_is_owned_by_view(camera_direction, int(panoramic_view_id))) {
@@ -1277,10 +1273,6 @@ struct Film {
     if (constants.use_panoramic) [[static_branch]] {
       panoramic_footprint = panoramic_footprint_get(
           texel_film, panoramic_lens_co, panoramic_is_outside_lens, panoramic_view_id);
-      if (panoramic_is_outside_lens && !panoramic_footprint.is_valid) {
-        clear_history(texel_film, out_color, out_depth);
-        return;
-      }
       weight_accum = weight_accumulation(panoramic_footprint, panoramic_outside_weight);
     }
     else {
