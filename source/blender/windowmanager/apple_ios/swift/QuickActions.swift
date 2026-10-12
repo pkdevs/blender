@@ -169,7 +169,7 @@ struct QuickActionsRow: View {
   /** The strip hugs its settings, measured as they lay out. */
   @State private var redoContentWidth: CGFloat = 0
   @State private var actionsWidth: CGFloat = 0
-  @State private var rowWidth: CGFloat = 0
+  @State private var actionsScrollWidth: CGFloat = 0
   @AppStorage(SettingsModel.showQuickActionsKey) private var showQuickActions = true
   @Namespace private var glass
 
@@ -186,9 +186,14 @@ struct QuickActionsRow: View {
     redoOpenID != nil && redoOpenID == redo.operation && !redo.properties.isEmpty
   }
 
-  private var redoPillTitle: String? {
-    guard let snapshot = redo.snapshot, !redo.properties.isEmpty, !redoOpen else { return nil }
+  /** The last operation's short name, while it has settings to adjust. */
+  private var redoTitle: String? {
+    guard let snapshot = redo.snapshot, !redo.properties.isEmpty else { return nil }
     return RedoStore.shortNames[snapshot.string("operator") ?? ""] ?? snapshot.string("title")
+  }
+
+  private var redoPillTitle: String? {
+    redoOpen ? nil : redoTitle
   }
 
   private var animation: Animation? {
@@ -206,34 +211,27 @@ struct QuickActionsRow: View {
         width - ShellMetrics.gizmoReserve
       let laneWidth = max(0, hotspot - 12 - laneLeading)
       let wide = width >= ShellMetrics.wideRow
-      VStack(spacing: 8) {
+      let pillWidth = redoTitle.map(redoPillWidth) ?? 0
+      /* The pill follows the actions in the row, so the row is measured without it. */
+      let rowWidth = actionsWidth + (redoPillTitle != nil ? (actionsWidth > 0 ? 8 : 0) + pillWidth : 0)
+      /* Folded, the pills rest beside the tool rail; open, the row centers on the viewport,
+       * staying in the lane. */
+      let rowX = actionsOpen ?
+        min(max(width / 2 - rowWidth / 2, laneLeading), laneLeading + laneWidth - rowWidth) : laneLeading
+      VStack(spacing: 0) {
         Spacer(minLength: 0)
-        if redoOpen && !wide {
-          redoStrip(width: stripWidth(maxWidth: laneWidth))
-            .frame(maxWidth: .infinity)
-        }
         /* Merging only glass that touches, so neighbouring buttons stay separate capsules. */
         PanelGlassGroup(spacing: 2) {
           ZStack(alignment: .leading) {
-            HStack(spacing: 8) {
-              actionsGroup(laneWidth: laneWidth)
-              if let title = redoPillTitle {
-                redoPill(title)
-              }
-            }
-            .fixedSize()
-            .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { rowWidth = $0 }
-            /* Folded, the pills rest beside the tool rail; open, the row centers on the viewport,
-             * staying in the lane. */
-            .offset(x: actionsOpen ?
-                      min(max(width / 2 - rowWidth / 2, laneLeading), laneLeading + laneWidth - rowWidth) :
-                      laneLeading)
-            if redoOpen && wide {
-              /* Opened in the row, after the Actions pill, centered on the viewport. */
-              let start = laneLeading + rowWidth + 8
-              let stripWidth = self.stripWidth(maxWidth: laneLeading + laneWidth - start)
-              redoStrip(width: stripWidth)
-                .offset(x: min(max(width / 2 - stripWidth / 2, start), laneLeading + laneWidth - stripWidth))
+            actionsGroup(laneWidth: laneWidth)
+              .fixedSize()
+              .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { actionsWidth = $0 }
+              .offset(x: rowX)
+            if let title = redoTitle {
+              redoMorph(title: title, frame: redoOpen ?
+                          stripFrame(width: width, laneLeading: laneLeading, laneWidth: laneWidth, wide: wide) :
+                          CGRect(x: rowX + rowWidth - pillWidth, y: 0, width: pillWidth,
+                                 height: ShellMetrics.buttonHeight))
             }
           }
           .frame(width: width, height: ShellMetrics.rowHeight, alignment: .leading)
@@ -291,12 +289,12 @@ struct QuickActionsRow: View {
             }
           }
           .padding(6)
-          .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { actionsWidth = $0 }
+          .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { actionsScrollWidth = $0 }
         }
         .softHorizontalScrollEdge()
         .scrollBounceBehavior(.basedOnSize, axes: .horizontal)
         /* As wide as the actions, scrolling when the lane is narrower. */
-        .frame(width: min(actionsWidth, max(0, laneWidth - 44 - 16 - (contextMenuAvailable ? 52 : 0) -
+        .frame(width: min(actionsScrollWidth, max(0, laneWidth - 44 - 16 - (contextMenuAvailable ? 52 : 0) -
                                               (redoPillTitle != nil ? 144 : 0))))
         if contextMenuAvailable {
           ContextMenuButton()
@@ -351,30 +349,10 @@ struct QuickActionsRow: View {
   /* -------------------------------------------------------------------- */
   /* Adjust Last Operation */
 
-  private func redoPill(_ title: String) -> some View {
-    Button {
-      withAnimation(animation) {
-        redoOpenID = redo.operation
-        actionsOpen = false
-      }
-    } label: {
-      /* As wide as the title, from 72 to 136 points with its margins. */
-      let measured = ceil((title as NSString).size(withAttributes: [.font: UIFont.systemFont(ofSize: 17)]).width)
-      Text(title)
-        .lineLimit(1)
-        .truncationMode(.tail)
-        .foregroundStyle(.primary)
-        .frame(width: min(136 - 24, max(72 - 24, measured)))
-        .padding(.horizontal, 12)
-        .frame(height: ShellMetrics.buttonHeight)
-        .contentShape(Capsule())
-    }
-    .buttonStyle(.plain)
-    .panelGlass(interactive: true, in: Capsule())
-    .panelGlassID("redo", in: glass)
-    .accessibilityLabel("Adjust \(redo.snapshot?.string("title") ?? "")")
-    .accessibilityHint("Show last operation controls")
-    .accessibilityIdentifier("blender.redo.collapsed")
+  /** As wide as the title, from 72 to 136 points with its margins. */
+  private func redoPillWidth(_ title: String) -> CGFloat {
+    let measured = ceil((title as NSString).size(withAttributes: [.font: UIFont.systemFont(ofSize: 17)]).width)
+    return min(136 - 24, max(72 - 24, measured)) + 24
   }
 
   /** The strip hugs its settings, after the close button and its margin. */
@@ -382,13 +360,69 @@ struct QuickActionsRow: View {
     min(max(0, maxWidth), min(1000, ceil(redoContentWidth) + 48))
   }
 
-  private func redoStrip(width: CGFloat) -> some View {
-    RedoContent(store: redo)
-      .frame(width: width, height: 60)
-      /* Not interactive glass, which would take the touches of the controls on it. */
-      .panelGlass(in: RoundedRectangle(cornerRadius: 20, style: .continuous))
-      .panelGlassID("redo", in: glass)
-      .accessibilityIdentifier("blender.redo.strip")
+  /** Where the strip opens, in the row's space, centered on its y. */
+  private func stripFrame(width: CGFloat, laneLeading: CGFloat, laneWidth: CGFloat, wide: Bool) -> CGRect {
+    if wide {
+      /* Opened in the row, after the Actions pill, centered on the viewport. */
+      let start = laneLeading + actionsWidth + (actionsWidth > 0 ? 8 : 0)
+      let strip = stripWidth(maxWidth: laneLeading + laneWidth - start)
+      return CGRect(x: min(max(width / 2 - strip / 2, start), laneLeading + laneWidth - strip), y: 0,
+                    width: strip, height: 60)
+    }
+    /* Above the row, centered on the window. */
+    let strip = stripWidth(maxWidth: laneWidth)
+    return CGRect(x: (width - strip) / 2, y: -(ShellMetrics.rowHeight / 2 + 8 + 30), width: strip, height: 60)
+  }
+
+  /**
+   * The pill and the strip are one glass shape, so opening grows the pill's frame into the strip's
+   * and closing folds it back, while their contents cross over inside it.
+   */
+  private func redoMorph(title: String, frame: CGRect) -> some View {
+    let shape = RoundedRectangle(cornerRadius: redoOpen ? 20 : ShellMetrics.buttonHeight / 2,
+                                 style: .continuous)
+    return ZStack(alignment: .leading) {
+      if redoOpen {
+        RedoContent(store: redo)
+          .frame(width: frame.width, height: frame.height)
+          .accessibilityIdentifier("blender.redo.strip")
+          .transition(.opacity)
+      }
+      else {
+        Button {
+          withAnimation(animation) {
+            redoOpenID = redo.operation
+            actionsOpen = false
+          }
+        } label: {
+          Text(title)
+            .lineLimit(1)
+            .truncationMode(.tail)
+            .foregroundStyle(.primary)
+            .frame(width: frame.width - 24)
+            .padding(.horizontal, 12)
+            .frame(height: ShellMetrics.buttonHeight)
+            .contentShape(Capsule())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("Adjust \(redo.snapshot?.string("title") ?? "")")
+        .accessibilityHint("Show last operation controls")
+        .accessibilityIdentifier("blender.redo.collapsed")
+        .transition(.opacity)
+        .background {
+          /* Measured ahead of opening, so the strip grows straight to its width. */
+          RedoContent(store: redo)
+            .frame(width: 1, height: 1)
+            .hidden()
+        }
+      }
+    }
+    .frame(width: frame.width, height: frame.height, alignment: .leading)
+    .clipShape(shape)
+    /* Not interactive glass once open, which would take the touches of the controls on it. */
+    .panelGlass(interactive: !redoOpen, in: shape)
+    .offset(x: frame.minX, y: frame.minY)
+    .transition(.scale(scale: 0.8, anchor: .leading).combined(with: .opacity))
   }
 }
 
