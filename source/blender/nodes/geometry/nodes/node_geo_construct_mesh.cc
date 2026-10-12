@@ -33,10 +33,6 @@ static bool validate_inputs(GeoNodeExecParams &params,
                             const ListPtr<int> &face_offsets_ptr)
 {
   const int verts_num = positions_list.size();
-  if (verts_num < 1) {
-    params.error_message_add(NodeWarningType::Error, "Number of points must be greater than zero");
-    return false;
-  }
   if (!corner_vertices_ptr && !face_offsets_ptr) {
     /* Create mesh with only vertices. */
     return true;
