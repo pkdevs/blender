@@ -21,7 +21,6 @@
 #include "GHOST_IOSRuntime.hh"
 
 #import "wm_apple_ios_blend_document.hh"
-#import "wm_apple_ios_file_drop.hh"
 #import "wm_apple_ios_icons.hh"
 #import "wm_apple_ios_launcher.hh"
 

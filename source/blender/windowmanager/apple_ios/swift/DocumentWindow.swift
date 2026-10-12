@@ -30,7 +30,6 @@ public final class DocumentController: UIHostingController<DocumentWindow> {
   private let pencilSource: GHOSTIOSPencilMenuDelegate
   private var stateTimer: Timer?
   private var contextMenu: UIEditMenuInteraction?
-  private var fileDrop: NSObject?
   private var menuBarItems: NSArray = []
   private var menuBarRequest: UInt64 = 0
   private var menuBarMode: String?
@@ -78,9 +77,9 @@ public final class DocumentController: UIHostingController<DocumentWindow> {
     }
     pencilMenu?.delegate = pencilSource
     wm_apple_ios_window_set_pencil_menu(window, pencilMenu)
-    /* Assets dragged out of the pane, and files from other apps, drop onto the viewport. */
+    /* Assets dragged out of the pane drop onto the viewport; files from other apps too, see
+     * #FileDrop. */
     viewport.addInteraction(shell.assets.dropInteraction)
-    fileDrop = wm_apple_ios_file_drop_install(viewport, window)
     installContextMenu()
 
     NotificationCenter.default.addObserver(self, selector: #selector(snapshotsPublished),
@@ -396,6 +395,7 @@ public struct DocumentWindow: View {
     ZStack {
       ViewportView(container: viewport)
         .ignoresSafeArea(edges: .vertical)
+        .onDrop(of: [.data, .image], delegate: FileDrop(model: model) { shell.assets.store.dragged != nil })
       if !model.viewportReady {
         ProgressView()
           .controlSize(.large)

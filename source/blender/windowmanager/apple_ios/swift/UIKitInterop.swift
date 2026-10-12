@@ -588,6 +588,13 @@ enum Haptics {
     UINotificationFeedbackGenerator().notificationOccurred(.success)
 #endif
   }
+
+  /** Something could not be done. */
+  static func error() {
+#if !os(visionOS)
+    UINotificationFeedbackGenerator().notificationOccurred(.error)
+#endif
+  }
 }
 
 /** \} */

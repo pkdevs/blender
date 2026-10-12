@@ -182,20 +182,15 @@ extern "C" void wm_apple_ios_window_set_pencil_menu(void *window, UIView<GHOSTIO
   }
 }
 
-/** Files dragged in from other apps drop on the viewport where they land, as on a Mac. */
-extern "C" NSObject *wm_apple_ios_file_drop_install(UIView *view, void *window)
+extern "C" void wm_apple_ios_window_drop_files(void *window,
+                                               NSArray<NSString *> *paths,
+                                               CGPoint point)
 {
-  WMIOSFileDrop *drop = [[[WMIOSFileDrop alloc] init] autorelease];
-  drop.dropFiles = ^(NSArray<NSString *> *paths, CGPoint point) {
-    if (window) {
-      GHOST_ios_window_drop_files(ghost_window(window), paths, point);
-    }
-  };
-  [view addInteraction:drop.interaction];
-  return drop;
+  if (window) {
+    GHOST_ios_window_drop_files(ghost_window(window), paths, point);
+  }
 }
 
-/** The shader compilation progress, shown while Blender is held up compiling. */
 /* -------------------------------------------------------------------- */
 /** \name Blender's Menus in UIKit
  * \{ */
