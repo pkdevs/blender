@@ -41,6 +41,13 @@ final class SettingsModel: ObservableObject {
       UserDefaults.standard.set(showQuickActions, forKey: Self.showQuickActionsKey)
     }
   }
+  /** The sidebar on the right and the brushes on the left, read by the viewport's controls. */
+  @Published var leftHanded: Bool {
+    didSet {
+      guard leftHanded != oldValue else { return }
+      UserDefaults.standard.set(leftHanded, forKey: leftHandedInterfaceKey)
+    }
+  }
 
   var fingerUsesToolChanged: ((Bool) -> Void)?
   var done: (() -> Void)?
@@ -49,6 +56,7 @@ final class SettingsModel: ObservableObject {
     let defaults = UserDefaults.standard
     touchInput = defaults.bool(forKey: Self.fingerUsesToolKey) ? .pencilAndFingers : .pencilOnly
     showQuickActions = defaults.object(forKey: Self.showQuickActionsKey) as? Bool ?? true
+    leftHanded = defaults.bool(forKey: leftHandedInterfaceKey)
   }
 
   func setKeymap(_ name: String) {
@@ -141,6 +149,19 @@ struct SettingsView: View {
           Text("Interface")
         } footer: {
           Text("Buttons for common actions on the selection, above the bottom of the viewport.")
+        }
+
+        Section {
+          Picker("Hand", selection: $model.leftHanded) {
+            Text("Right-Hand Interface").tag(false)
+            Text("Left-Hand Interface").tag(true)
+          }
+          .pickerStyle(.inline)
+          .labelsHidden()
+        } header: {
+          Text("Drawing Hand")
+        } footer: {
+          Text("Brush size, strength and + and − sit on the side of the hand not holding the Pencil, the brushes on the other.")
         }
       }
       .navigationTitle("Settings")
