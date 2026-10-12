@@ -164,8 +164,9 @@ static void pen_find_closest_handle(const PenToolOperation &ptd,
   const Array<int> point_to_curve_map = curves.point_to_curve_map();
 
   if (const std::optional<Span<float3>> handle_left = curves.handle_positions_left()) {
+    const Span<float3> handle_left_span = *handle_left;
     bezier_points.foreach_index([&](const int point_i) {
-      const float2 pos_proj = ptd.layer_to_screen(layer_to_object, (*handle_left)[point_i]);
+      const float2 pos_proj = ptd.layer_to_screen(layer_to_object, handle_left_span[point_i]);
       const float distance_squared = math::distance_squared(pos_proj, mouse_co);
 
       /* Save the closest point. */
@@ -182,8 +183,9 @@ static void pen_find_closest_handle(const PenToolOperation &ptd,
   }
 
   if (const std::optional<Span<float3>> handle_right = curves.handle_positions_right()) {
+    const Span<float3> handle_right_span = *handle_right;
     bezier_points.foreach_index([&](const int point_i) {
-      const float2 pos_proj = ptd.layer_to_screen(layer_to_object, (*handle_right)[point_i]);
+      const float2 pos_proj = ptd.layer_to_screen(layer_to_object, handle_right_span[point_i]);
       const float distance_squared = math::distance_squared(pos_proj, mouse_co);
 
       /* Save the closest point. */
