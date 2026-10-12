@@ -28,6 +28,7 @@
 #include "BLI_generic_virtual_array.hh"
 #include "BLI_math_vector_types.hh"
 #include "BLI_parameter_pack_utils.hh"
+#include "BLI_unroll.hh"
 
 namespace blender::varray_exec {
 
@@ -179,36 +180,40 @@ template<typename T> struct TypeSplitInfo {
   template<int64_t MaxChunkSize> using Split = int;
 };
 
-template<> struct TypeSplitInfo<float3> {
+template<typename T, int VecSize> struct TypeSplitInfo<VecBase<T, VecSize>> {
   static constexpr bool supports_split = true;
-  template<int64_t MaxChunkSize> using Split = std::array<std::array<float, MaxChunkSize>, 3>;
+  template<int64_t MaxChunkSize> using Split = std::array<std::array<T, MaxChunkSize>, VecSize>;
 
   template<int64_t MaxChunkSize>
-  static float3 fetch(const Split<MaxChunkSize> &split, const int64_t i)
+  static VecBase<T, VecSize> fetch(const Split<MaxChunkSize> &split, const int64_t i)
   {
-    return float3(split[0][i], split[1][i], split[2][i]);
+    VecBase<T, VecSize> result;
+    unroll<VecSize>([&](const auto j) { result[j] = split[j][i]; });
+    return result;
   }
 
   template<int64_t MaxChunkSize>
-  static void store(Split<MaxChunkSize> &split, const int64_t i, const float3 &v)
+  static void store(Split<MaxChunkSize> &split, const int64_t i, const VecBase<T, VecSize> &v)
   {
-    split[0][i] = v[0];
-    split[1][i] = v[1];
-    split[2][i] = v[2];
+    unroll<VecSize>([&](const auto j) { split[j][i] = v[j]; });
   }
 
   template<int64_t MaxChunkSize>
-  static void split(const int64_t size, const float3 *values, Split<MaxChunkSize> &split)
+  static void split(const int64_t size,
+                    const VecBase<T, VecSize> *values,
+                    Split<MaxChunkSize> &split)
   {
-    for (int64_t i = 0; i < size; i++) {
+    for (const int64_t i : IndexRange(size)) {
       store<MaxChunkSize>(split, i, values[i]);
     }
   }
 
   template<int64_t MaxChunkSize>
-  static void merge(const int64_t size, const Split<MaxChunkSize> &split, float3 *r_values)
+  static void merge(const int64_t size,
+                    const Split<MaxChunkSize> &split,
+                    VecBase<T, VecSize> *r_values)
   {
-    for (int64_t i = 0; i < size; i++) {
+    for (const int64_t i : IndexRange(size)) {
       r_values[i] = fetch<MaxChunkSize>(split, i);
     }
   }
