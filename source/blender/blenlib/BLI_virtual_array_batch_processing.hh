@@ -420,7 +420,7 @@ template<typename ElementFn,
          size_t... I,
          typename... Params>
 inline void execute_element_fn_with_params(ElementFn &&element_fn,
-                                           const ExecPreset exec_preset,
+                                           const ExecPreset &exec_preset,
                                            const IndexMask &mask,
                                            TypeSequence<ParamTags...> /*param_tags*/,
                                            std::index_sequence<I...> /*indices*/,
@@ -524,8 +524,9 @@ inline void execute_element_fn_with_params(ElementFn &&element_fn,
   }
 }
 
-template<typename Out, typename ElementFn, typename... In>
+template<typename ElementFn, ExecPresetC ExecPreset, typename Out, typename... In>
 inline void batch_process__n_in__1_out(const IndexMask &mask,
+                                       const ExecPreset &exec_preset,
                                        const VArray<In> &...in_params,
                                        MutableSpan<Out> out_param,
                                        ElementFn &&element_fn)
@@ -534,7 +535,7 @@ inline void batch_process__n_in__1_out(const IndexMask &mask,
       TypeSequence<ParamTag<ParamCategory::Input, In>..., ParamTag<ParamCategory::Output, Out>>();
   execute_element_fn_with_params(
       [&](const In &...in, Out &out) { new (&out) Out(element_fn(in...)); },
-      exec_presets::AllSpanOrSingle(),
+      exec_preset,
       mask,
       param_tags,
       std::make_index_sequence<param_tags.size()>(),
@@ -542,15 +543,21 @@ inline void batch_process__n_in__1_out(const IndexMask &mask,
       out_param);
 }
 
-template<typename In1, typename In2, typename Out1, typename ElementFn>
-inline void batch_process__2_varray_in__1_span_out(const IndexMask &mask,
-                                                   const VArray<In1> &in1,
-                                                   const VArray<In2> &in2,
-                                                   MutableSpan<Out1> out1,
-                                                   ElementFn &&element_fn)
+template<typename In1,
+         typename In2,
+         typename Out1,
+         typename ElementFn,
+         ExecPresetC ExecPreset = exec_presets::Materialized>
+inline void batch_process__2_varray_in__1_span_out(
+    const IndexMask &mask,
+    const VArray<In1> &in1,
+    const VArray<In2> &in2,
+    MutableSpan<Out1> out1,
+    ElementFn &&element_fn,
+    const ExecPreset &exec_preset = exec_presets::Materialized())
 {
-  batch_process__n_in__1_out<Out1, ElementFn, In1, In2>(
-      mask, in1, in2, out1, std::forward<ElementFn>(element_fn));
+  batch_process__n_in__1_out<ElementFn, ExecPreset, Out1, In1, In2>(
+      mask, exec_preset, in1, in2, out1, std::forward<ElementFn>(element_fn));
 }
 
 }  // namespace blender::varray_batch
