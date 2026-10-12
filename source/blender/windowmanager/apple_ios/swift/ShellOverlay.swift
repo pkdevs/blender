@@ -3,11 +3,11 @@
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
 /** \file
- * The document window's panels: Properties, the Outliner, the timeline and the asset pane. Their
+ * The document window's panels: Properties, the Outliner and the asset pane. Their
  * content is SwiftUI; they keep the glass UIKit draws, whose vibrancy SwiftUI's glass does not
  * give, and their own presentation. This layer places them, between the toolbar and the controls
  * resting on the bottom edge, and tells the window how much of the bottom the asset pane and
- * timeline take.
+ * timeline take. The window shows the timeline itself.
  */
 
 import SwiftUI
@@ -27,7 +27,8 @@ final class ShellOverlay: UIView {
     backgroundColor = .clear
     /* Each adds its views to this layer, and presents from the controller it belongs to. */
     panels = SwiftScenePanels(overlay: self) { BlenderIcon.image($0) }
-    timeline = SwiftTimeline(overlay: self)
+    /* The window shows the timeline itself, as #TimelinePanel. */
+    timeline = SwiftTimeline()
     assets = SwiftAssets(overlay: self)
     panels.menuProvider = { wm_apple_ios_property_menu($0 as! [AnyHashable: Any]) }
     panels.panelsDidChange = { [weak self] in
@@ -80,9 +81,10 @@ final class ShellOverlay: UIView {
     let timelineTray = timeline.visible && trayShown ? timeline.height + 8 : 0
 #endif
     let tray = assetsTray + timelineTray
-    if abs(tray - model.bottomTray) > 0.5 {
-      withAnimation(UIAccessibility.isReduceMotionEnabled ? nil : .spring(response: 0.3, dampingFraction: 0.9)) {
+    if abs(tray - model.bottomTray) > 0.5 || abs(assetsTray - model.assetsTray) > 0.5 {
+      withAnimation(SwiftTimeline.animation) {
         model.bottomTray = tray
+        model.assetsTray = assetsTray
       }
     }
     if bounds.height > 0 && !model.desktop {
@@ -98,8 +100,6 @@ final class ShellOverlay: UIView {
     let trayLeft = max(safe.minX, bounds.minX + edge)
     let trayWidth = max(0, min(safe.maxX, bounds.maxX - edge) - trayLeft)
     assets.layout(in: CGRect(x: trayLeft, y: panelTop, width: trayWidth, height: max(0, trayBottom - panelTop)))
-    timeline.layout(in: CGRect(x: trayLeft, y: panelTop, width: trayWidth,
-                               height: max(0, trayBottom - assetsTray - panelTop)))
     panels.layout(in: CGRect(x: safe.minX, y: panelTop, width: safe.width, height: max(0, panelBottom - panelTop)))
   }
 

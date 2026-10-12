@@ -44,6 +44,7 @@ final class TimelineStore {
   var playing = false
   var recording = false
   var keys: [TimelineKey] = []
+  var visible = false
   var expanded = false
   var compact = false
   /** Blender's frame; the knob follows it unless a finger holds the knob. */
@@ -424,39 +425,33 @@ private struct FrameFollower: ViewModifier {
 /** \name Strip
  * \{ */
 
-/** Reads everything but the frame, so playback leaves the buttons alone. */
+/** Reads everything but the frame, so playback leaves the buttons alone. One layout for both sizes,
+ * each control in it once: opening the key track moves the transport, scrubber and keyframe button
+ * to their new places. */
 struct TimelineContent: View {
   let store: TimelineStore
+  @State private var transportWidth: CGFloat = 0
 
   var body: some View {
-    Group {
-      if store.expanded {
-        VStack(spacing: 0) {
-          Scrubber(store: store)
-            .padding(.horizontal, 8)
-          ZStack {
-            transport
-            HStack {
-              if store.keys.contains(where: \.selected) { deleteButton }
-              Spacer()
-              keysButton
-            }
-            .padding(.horizontal, 8)
-          }
-          .frame(height: controlsRowHeight)
-        }
+    let expanded = store.expanded
+    ZStack {
+      /* Collapsed, between the transport and the keyframe button; expanded, across the top. */
+      Scrubber(store: store)
+        .padding(.leading, expanded ? 8 : 8 + transportWidth + 4)
+        .padding(.trailing, expanded ? 8 : 2 + 44 + 8)
+        .padding(.bottom, expanded ? controlsRowHeight : 0)
+      transport
+        .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { transportWidth = $0 }
+        .padding(.leading, expanded ? 0 : 8)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: expanded ? .bottom : .leading)
+      if expanded && store.keys.contains(where: \.selected) {
+        deleteButton
+          .padding(.leading, 8)
+          .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomLeading)
       }
-      else {
-        HStack(spacing: 0) {
-          transport
-            .padding(.leading, 8)
-          Scrubber(store: store)
-            .padding(.leading, 4)
-            .padding(.trailing, 2)
-          keysButton
-            .padding(.trailing, 8)
-        }
-      }
+      keysButton
+        .padding(.trailing, 8)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: expanded ? .bottomTrailing : .trailing)
     }
     .foregroundStyle(.primary)
   }
@@ -534,21 +529,51 @@ struct TimelineContent: View {
   }
 }
 
+/** The timeline along the bottom of a SwiftUI window, in the system's glass. */
+struct TimelinePanel: View {
+  let store: TimelineStore
+
+  static func height(expanded: Bool) -> CGFloat {
+    expanded ? controlsRowHeight + knobBandHeight + keyAreaHeight : collapsedHeight
+  }
+
+  var body: some View {
+    TimelineContent(store: store)
+      .frame(height: Self.height(expanded: store.expanded))
+      .onGeometryChange(for: Bool.self) { $0.size.width < 520 } action: { store.set(\.compact, $0) }
+      .panelGlass(in: RoundedRectangle(cornerRadius: store.expanded ? 24 : collapsedHeight / 2,
+                                       style: .continuous))
+      .accessibilityIdentifier("blender.timeline.panel")
+  }
+}
+
 @MainActor
 @objc(WMIOSSwiftTimeline)
 public final class SwiftTimeline: NSObject {
   private weak var overlay: UIView?
-  private let store = TimelineStore()
+  let store = TimelineStore()
+  /** The UIKit window's panel; a SwiftUI window shows #TimelinePanel itself. */
   private let panel: UIVisualEffectView
   private let host: UIHostingController<TimelineContent>
+  private let usesPanel: Bool
   private var snapshot: NSDictionary?
   @objc public let button: UIBarButtonItem
-  @objc public private(set) var visible = false
+  @objc public var visible: Bool { store.visible }
   @objc public var visibilityDidChange: (() -> Void)?
 
   @objc(initWithOverlay:)
-  public init(overlay: UIView) {
+  public convenience init(overlay: UIView) {
+    self.init(overlay: overlay, usesPanel: true)
+  }
+
+  /** For a SwiftUI window, which shows the timeline itself. */
+  convenience override init() {
+    self.init(overlay: nil, usesPanel: false)
+  }
+
+  private init(overlay: UIView?, usesPanel: Bool) {
     self.overlay = overlay
+    self.usesPanel = usesPanel
     let icon = UIImage(named: "blender.time")?.withRenderingMode(.alwaysTemplate)
     button = UIBarButtonItem(image: icon ?? UIImage(systemName: "timeline.selection"), style: .plain,
                              target: nil, action: nil)
@@ -571,7 +596,7 @@ public final class SwiftTimeline: NSObject {
     host.safeAreaRegions = []
     host.view.autoresizingMask = [.flexibleWidth, .flexibleHeight]
     panel.contentView.addSubview(host.view)
-    overlay.addSubview(panel)
+    overlay?.addSubview(panel)
     store.toggleExpanded = { [weak self] in self?.toggleExpanded(nil) }
 #if os(visionOS)
     Self.current = self
@@ -588,7 +613,7 @@ public final class SwiftTimeline: NSObject {
   }
 
   func setWindowOpen(_ open: Bool) {
-    visible = open
+    store.visible = open
     button.isSelected = open
     Engine.setting("timeline_visible", open ? "1" : "0")
     visibilityDidChange?()
@@ -620,7 +645,8 @@ public final class SwiftTimeline: NSObject {
 
   @objc(toggleExpanded:)
   public func toggleExpanded(_ sender: Any?) {
-    store.expanded.toggle()
+    if usesPanel { store.expanded.toggle() }
+    else { withAnimation(Self.animation) { store.expanded.toggle() } }
     panel.layer.cornerRadius = store.expanded ? 24 : collapsedHeight / 2
     visibilityDidChange?()
   }
@@ -631,10 +657,15 @@ public final class SwiftTimeline: NSObject {
     PanelWindows.toggle(.timeline)
     return
 #endif
-    visible.toggle()
+    if usesPanel { store.visible.toggle() }
+    else { withAnimation(Self.animation) { store.visible.toggle() } }
     button.isSelected = visible
     /* Blender lists keyframes only while the timeline shows them. */
     Engine.setting("timeline_visible", visible ? "1" : "0")
+    guard usesPanel else {
+      visibilityDidChange?()
+      return
+    }
     let reduceMotion = UIAccessibility.isReduceMotionEnabled
     let hidden = reduceMotion ? .identity : CGAffineTransform(translationX: 0, y: 14).scaledBy(x: 0.98, y: 0.98)
     panel.isUserInteractionEnabled = visible
@@ -656,6 +687,11 @@ public final class SwiftTimeline: NSObject {
       if finished && self.panel.alpha == 0 { self.panel.isHidden = true }
     }
     visibilityDidChange?()
+  }
+
+  /** The timeline and everything resting on it move together. */
+  static var animation: Animation? {
+    UIAccessibility.isReduceMotionEnabled ? nil : .spring(response: 0.3, dampingFraction: 0.9)
   }
 
   @objc(layoutInRect:)

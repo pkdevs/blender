@@ -315,6 +315,9 @@ public struct DocumentWindow: View {
           QuickActionsRow(model: model)
           ToolRails(model: model)
           ViewGizmoLayer(model: model)
+#if !os(visionOS) /* A window of its own there. */
+          TimelineLayer(model: model, store: overlay.timeline.store)
+#endif
         }
         ShellOverlayView(overlay: overlay)
           .ignoresSafeArea()
@@ -374,6 +377,29 @@ private struct ShowInterfaceButton: View {
     .onHover { inside in withAnimation(.easeOut(duration: 0.15)) { near = inside } }
     .accessibilityLabel("Show Interface")
     .accessibilityIdentifier("blender.interface.show")
+  }
+}
+
+/** The timeline along the bottom, on the open asset pane, as far from the window's sides as from
+ * its bottom. */
+struct TimelineLayer: View {
+  let model: ShellModel
+  let store: TimelineStore
+
+  var body: some View {
+    let safe = model.safeAreaInsets
+    let edge = safe.bottom + 6
+    VStack(spacing: 0) {
+      Spacer(minLength: 0)
+      if store.visible {
+        TimelinePanel(store: store)
+          .transition(.opacity.combined(with: .offset(y: 14)).combined(with: .scale(scale: 0.98)))
+      }
+    }
+    .padding(.leading, max(safe.left, edge))
+    .padding(.trailing, max(safe.right, edge))
+    .padding(.bottom, edge + model.assetsTray)
+    .ignoresSafeArea()
   }
 }
 
