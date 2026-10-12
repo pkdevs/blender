@@ -717,7 +717,7 @@ struct EnumControl: View {
       /* Choices Blender draws as a row (a brush's Add and Subtract, the selection modes): one tap
        * each, with the system's sliding selection. */
       if compact {
-        segmented.controlSize(.small)
+        segmented.controlSize(.mini)
       }
       else {
         FractionRow(fraction: 0.53) {

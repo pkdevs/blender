@@ -371,7 +371,7 @@ final class ScrubIndicator {
  * selection over at once when tapped; Blender's value only arrives a moment later, so the control
  * keeps the choice it made until Blender shows it, instead of jumping back meanwhile.
  */
-struct SegmentedControl: UIViewRepresentable {
+struct SegmentedControl: View {
   struct Segment: Equatable {
     var value: String
     var title: String
@@ -384,74 +384,42 @@ struct SegmentedControl: UIViewRepresentable {
   var accessibilityLabel: String? = nil
   var choose: (String) -> Void
 
-  final class Coordinator: NSObject {
-    var parent: SegmentedControl
-    var segments: [Segment] = []
-    /** The value chosen here that Blender does not show yet, and until when to wait for it. */
-    var pending: String?
-    var pendingUntil = Date.distantPast
+  /** The value chosen here that Blender does not show yet, and until when to wait for it. */
+  @State private var pending: String?
+  @State private var pendingUntil = Date.distantPast
 
-    init(_ parent: SegmentedControl) {
-      self.parent = parent
-    }
+  private var shown: String {
+    if let pending, pending != selection, Date() < pendingUntil { return pending }
+    return selection
+  }
 
-    @objc func changed(_ control: UISegmentedControl) {
-      let index = control.selectedSegmentIndex
-      guard segments.indices.contains(index) else { return }
-      pending = segments[index].value
+  var body: some View {
+    Picker(accessibilityLabel ?? "", selection: Binding(get: { shown }, set: { value in
+      pending = value
       pendingUntil = Date().addingTimeInterval(1.0)
-      parent.choose(segments[index].value)
-    }
-  }
-
-  func makeCoordinator() -> Coordinator { Coordinator(self) }
-
-  /** As tall as it is given, so it fits the strip's compact columns as well as the bar. */
-  func sizeThatFits(_ proposal: ProposedViewSize, uiView: UISegmentedControl, context: Context) -> CGSize? {
-    let natural = uiView.intrinsicContentSize
-    return CGSize(width: proposal.width ?? natural.width, height: min(proposal.height ?? natural.height, natural.height))
-  }
-
-  func makeUIView(context: Context) -> UISegmentedControl {
-    let control = UISegmentedControl()
-    control.addTarget(context.coordinator, action: #selector(Coordinator.changed(_:)),
-                      for: .valueChanged)
-    control.setContentHuggingPriority(.defaultLow, for: .horizontal)
-    control.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
-    return control
-  }
-
-  func updateUIView(_ control: UISegmentedControl, context: Context) {
-    let coordinator = context.coordinator
-    coordinator.parent = self
-    if coordinator.segments != segments {
-      coordinator.segments = segments
-      control.removeAllSegments()
-      for (index, segment) in segments.enumerated() {
-        if let icon = segment.image {
-          /* A copy to name, as icons are shared. */
-          let image = icon.withRenderingMode(icon.renderingMode)
-          image.accessibilityLabel = segment.title
-          control.insertSegment(with: image, at: index, animated: false)
+      choose(value)
+    })) {
+      ForEach(segments, id: \.value) { segment in
+        Group {
+          if let image = segment.image {
+            /* At a symbol's size, as Blender's icons are larger artwork. */
+            Image(uiImage: image)
+              .renderingMode(image.renderingMode == .alwaysOriginal ? .original : .template)
+              .resizable()
+              .scaledToFit()
+              .frame(width: 18, height: 18)
+              .accessibilityLabel(segment.title)
+          }
+          else {
+            Text(segment.title)
+          }
         }
-        else {
-          control.insertSegment(withTitle: segment.title, at: index, animated: false)
-        }
+        .tag(segment.value)
       }
     }
-    control.isEnabled = enabled
-    control.accessibilityLabel = accessibilityLabel
-    /* Blender has caught up with the choice made here, or never will. */
-    if let pending = coordinator.pending,
-       pending == selection || Date() > coordinator.pendingUntil
-    {
-      coordinator.pending = nil
-    }
-    let shown = coordinator.pending ?? selection
-    let index = segments.firstIndex { $0.value == shown } ?? UISegmentedControl.noSegment
-    if control.selectedSegmentIndex != index {
-      control.selectedSegmentIndex = index
-    }
+    .pickerStyle(.segmented)
+    .labelsHidden()
+    .disabled(!enabled)
   }
 }
 
