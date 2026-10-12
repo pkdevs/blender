@@ -63,7 +63,7 @@ class CompositorTest(api.Test):
 
         args = {'device_type': device_type}
 
-        result, _ = env.run_in_blender(_run, args, blender_args, foreground=True)
+        result, _ = env.run_in_blender(_run, args, blender_args)
         return result
 
 
