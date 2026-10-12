@@ -21,8 +21,6 @@
 
 #include "GEO_foreach_geometry.hh"
 
-#include "BLI_timeit.hh"
-
 #include "node_geometry_util.hh"
 
 #include <fmt/format.h>
@@ -118,7 +116,6 @@ static void grease_pencil_add_missing_update_tags(const std::string &name,
 
 static void node_geo_exec(GeoNodeExecParams params)
 {
-  SCOPED_TIMER_AVERAGED(__func__);
   GeometrySet geometry_set = params.extract_input<GeometrySet>("Geometry"_ustr);
   const std::string name = params.extract_input<std::string>("Name"_ustr);
 
