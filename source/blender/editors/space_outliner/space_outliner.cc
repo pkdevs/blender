@@ -274,6 +274,9 @@ static void outliner_main_region_listener(const wmRegionListenerParams *params)
             {
               ED_region_tag_redraw(region);
             }
+            else {
+              ED_region_tag_redraw_no_rebuild(region);
+            }
           }
           break;
         case ND_ANIMCHAN:
