@@ -4,8 +4,9 @@
 
 /** \file
  * Properties and the Outliner, viewport shading and tool settings: their stores, which Blender's
- * snapshots fill, and whether the panels show. The window shows the Outliner as its sidebar and
- * Properties as its inspector, or on Apple Vision Pro opens them as windows of their own.
+ * snapshots fill, and whether the panels show. The window slides the Outliner and Properties in
+ * from its sides, shows them as sheets on a phone, or on Apple Vision Pro opens them as windows of
+ * their own.
  */
 
 import SwiftUI

@@ -3,10 +3,10 @@
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
 /** \file
- * The document window's toolbar: back to the documents, the editing mode, adding to the scene,
- * the mesh selection mode and undo; the active tool's settings in the middle; then the panels,
- * viewport shading, Share and More. The system lays its glass groups out and moves what does not
- * fit into its overflow menu.
+ * The document window's toolbar: back to the documents, the sidebar menu,
+ * the editing mode, adding to the scene and the mesh selection mode; the active tool's settings in
+ * the middle; then viewport shading, Undo with Share and More, and Properties. A phone keeps the
+ * most used items and puts the rest in one menu.
  */
 
 import SwiftUI

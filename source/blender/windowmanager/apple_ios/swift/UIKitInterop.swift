@@ -3,8 +3,10 @@
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
 /** \file
- * The few UIKit pieces the SwiftUI interface keeps: number scrubbing must arbitrate with
- * scrolling, and the color picker needs explicit begin and end for one undo step per drag.
+ * Pieces the interface shares that reach into UIKit: number scrubbing, which must arbitrate with
+ * scrolling; the color picker, which needs explicit begin and end for one undo step per drag;
+ * anchors for presenting UIKit controllers; haptics; and the glass, which visionOS draws its own
+ * way.
  */
 
 import SwiftUI
@@ -595,17 +597,6 @@ func makePanelGlass() -> UIVisualEffect {
 #else
   return UIGlassEffect(style: .regular)
 #endif
-}
-
-extension UIButton.Configuration {
-  /** A glass button; visionOS draws its bordered buttons as glass. */
-  static func panelGlass() -> UIButton.Configuration {
-#if os(visionOS)
-    return .bordered()
-#else
-    return .glass()
-#endif
-  }
 }
 
 /** \} */
