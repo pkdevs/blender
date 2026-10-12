@@ -1,2 +1,3 @@
 Referenced by issue #141871, Blender LTS: Maintenance Task 4.5
 Referenced by issue #142025, Unexpected Behavior on Closed Grease Pencil Curves with Connected Proportional Editing
+Referenced by pull request #165046, Cleanup: non-existing function referenced in comment
