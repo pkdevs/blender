@@ -532,13 +532,20 @@ struct DocumentToolbar: ToolbarContent {
     /* The room less the capsule's padding, and the overflow button when it is shown. */
     let room = model.toolStripRoom - 24
     let overflow = stripWidth > room + 0.5
+    let strip = ToolStrip(store: shell.panels.toolStripStore)
+      .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { stripWidth = $0 }
     return HStack(spacing: 4) {
-      ScrollView(.horizontal, showsIndicators: false) {
-        ToolStrip(store: shell.panels.toolStripStore)
-          .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { stripWidth = $0 }
+      if overflow {
+        ScrollView(.horizontal, showsIndicators: false) { strip }
+          .scrollBounceBehavior(.basedOnSize, axes: .horizontal)
+          .frame(width: max(1, room - 36))
       }
-      .scrollBounceBehavior(.basedOnSize, axes: .horizontal)
-      .frame(width: max(1, overflow ? room - 36 : stripWidth))
+      else {
+        /* At its own width, which the bar reads as it places the item: a width measured only
+         * after layout leaves the bar's item as narrow as it first was, and taps outside it
+         * do not reach the strip. */
+        strip.fixedSize()
+      }
       if overflow {
         Button("More Tool Settings", systemImage: "ellipsis") { model.toolSettingsOpen = true }
           .labelStyle(.iconOnly)
