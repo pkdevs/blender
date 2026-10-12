@@ -299,14 +299,13 @@ public struct DocumentWindow: View {
   private var controlsShown: Bool { !model.desktop && !model.interfaceHidden }
 
   public var body: some View {
+    editor
+  }
+
+  /** The viewport with its controls and the toolbar. */
+  private var editor: some View {
     NavigationStack {
       layers
-        .onGeometryChange(for: CGFloat.self) { $0.frame(in: .global).minY } action: { top in
-          if model.contentTop != top {
-            model.contentTop = top
-            overlay.setNeedsLayout()
-          }
-        }
         .toolbar {
           /* Kept while the bar is hidden: items added again lose the bar's centering of the strip. */
           DocumentToolbar(model: model, overlay: overlay, commands: commands, stripWidth: $stripWidth)
@@ -320,8 +319,21 @@ public struct DocumentWindow: View {
     }
   }
 
-  /** The viewport, the controls over it and the panels, back to front. */
+  /** The viewport and the controls over it, then Properties and the Outliner, which keep below the
+   * toolbar. */
   private var layers: some View {
+    ZStack {
+      viewportLayers
+        .ignoresSafeArea()
+#if !os(visionOS) /* Windows of their own there. */
+      if controlsShown {
+        SidePanelsLayer(model: model, panels: overlay.panels)
+      }
+#endif
+    }
+  }
+
+  private var viewportLayers: some View {
     ZStack {
       ViewportView(container: viewport)
         .ignoresSafeArea()
@@ -384,6 +396,42 @@ private struct ShowInterfaceButton: View {
     .onHover { inside in withAnimation(.easeOut(duration: 0.15)) { near = inside } }
     .accessibilityLabel("Show Interface")
     .accessibilityIdentifier("blender.interface.show")
+  }
+}
+
+/** Properties and the Outliner floating over the viewport's sides, above the controls resting on
+ * its bottom edge. Only one fits a narrow window. */
+struct SidePanelsLayer: View {
+  let model: ShellModel
+  let panels: SwiftScenePanels
+
+  var body: some View {
+    GeometryReader { proxy in
+      let width = min(336, max(0, proxy.size.width - 24))
+      let transition = { (edge: Edge) in
+        AnyTransition.move(edge: edge).combined(with: .opacity)
+      }
+      HStack(alignment: .top, spacing: 0) {
+        if model.hierarchyShown {
+          HierarchyPanel(store: panels.hierarchy) { panels.setHierarchyShown(false) }
+            .frame(width: width)
+            .panelGlass(in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+            .accessibilityIdentifier("blender.hierarchy.panel")
+            .transition(transition(.leading))
+        }
+        Spacer(minLength: 0)
+        if model.inspectorShown {
+          InspectorPanel(store: panels.inspector) { panels.setInspectorShown(false) }
+            .frame(width: width)
+            .panelGlass(in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+            .accessibilityIdentifier("blender.inspector.panel")
+            .transition(transition(.trailing))
+        }
+      }
+      .padding(12)
+      .padding(.bottom, 52 + model.bottomTray)
+      .onChange(of: proxy.size.width, initial: true) { _, width in panels.narrow = width < 700 }
+    }
   }
 }
 

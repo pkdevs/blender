@@ -198,15 +198,12 @@ struct QuickActionsRow: View {
 
   var body: some View {
     GeometryReader { geometry in
-      let safe = geometry.safeAreaInsets
       let width = geometry.size.width
       /* The lane between the tool rail and the navigation gizmo. */
       let laneLeading = ShellMetrics.railLeading + model.toolRailWidth + 12
-      /* Up to the navigation gizmo's hotspot, which Blender places in window fractions. */
-      let frame = geometry.frame(in: .global)
+      /* Up to the navigation gizmo's hotspot, which Blender places in fractions of the viewport. */
       let gizmo = model.navigationGizmo
-      let hotspot = gizmo.count == 3 ?
-        gizmo[0] * (frame.maxX + frame.minX) - max(44, gizmo[2] * (frame.maxX + frame.minX) + 10) - frame.minX :
+      let hotspot = gizmo.count == 3 ? gizmo[0] * width - max(44, gizmo[2] * width + 10) :
         width - ShellMetrics.gizmoReserve
       let laneWidth = max(0, hotspot - 12 - laneLeading)
       let wide = width >= ShellMetrics.wideRow
@@ -243,7 +240,7 @@ struct QuickActionsRow: View {
           .frame(width: width, height: ShellMetrics.rowHeight, alignment: .leading)
         }
       }
-      .padding(.bottom, max(safe.bottom, 0) + ShellMetrics.rowBottom + model.bottomTray)
+      .padding(.bottom, model.safeAreaInsets.bottom + ShellMetrics.rowBottom + model.bottomTray)
       .ignoresSafeArea(edges: .bottom)
     }
     .onChange(of: model.redo.map { $0 as NSDictionary }, initial: true) { _, snapshot in

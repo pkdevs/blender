@@ -26,15 +26,17 @@ final class ShellOverlay: UIView {
     super.init(frame: CGRect(x: 0, y: 0, width: 100, height: 100))
     backgroundColor = .clear
     /* Each adds its views to this layer, and presents from the controller it belongs to. */
-    panels = SwiftScenePanels(overlay: self)
+    panels = SwiftScenePanels()
     /* The window shows the timeline itself, as #TimelinePanel. */
     timeline = SwiftTimeline()
     assets = SwiftAssets()
     panels.menuProvider = { wm_apple_ios_property_menu($0 as! [AnyHashable: Any]) }
     panels.panelsDidChange = { [weak self] in
       guard let self else { return }
-      model.inspectorShown = panels.inspectorShown
-      model.hierarchyShown = panels.hierarchyShown
+      withAnimation(SwiftTimeline.animation) {
+        self.model.inspectorShown = self.panels.inspectorShown
+        self.model.hierarchyShown = self.panels.hierarchyShown
+      }
     }
     timeline.visibilityDidChange = { [weak self] in self?.trayChanged() }
     assets.visibilityDidChange = { [weak self] in self?.trayChanged() }
@@ -89,9 +91,6 @@ final class ShellOverlay: UIView {
       let trayTop = safe.maxY - 6 - (tray > 0 ? tray - 8 : 0)
       WM_apple_ios_ui_bottom_tray_set(tray > 0 ? Float((bounds.height - trayTop) / bounds.height) : 0)
     }
-    let panelTop = max(safe.minY, model.contentTop)
-    let panelBottom = min(safe.maxY - 64 - tray, keyboardLayoutGuide.layoutFrame.minY)
-    panels.layout(in: CGRect(x: safe.minX, y: panelTop, width: safe.width, height: max(0, panelBottom - panelTop)))
   }
 
   /** Blender's panels, timeline and asset snapshots, whichever changed. */
