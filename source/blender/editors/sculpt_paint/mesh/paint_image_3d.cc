@@ -553,7 +553,7 @@ static void do_paint_pixels(const PaintBlendSettings &blend_settings,
                             Span<int> corner_tri_faces,
                             Span<bool> select_poly,
                             ImageData &image_data,
-                            ImageData &mask_data,
+                            ImageData *mask_data,
                             bke::pbvh::Node & /*node*/,
                             PixelNode &pixel_node)
 {
@@ -587,23 +587,31 @@ static void do_paint_pixels(const PaintBlendSettings &blend_settings,
 
   for (UDIMTilePixels &tile_data : pixel_node.tiles) {
     ImBuf *image_buffer = image_data.image_buffers.lookup_default(tile_data.tile_number, nullptr);
-    ImBuf *mask_buffer = mask_data.image_buffers.lookup_default(tile_data.tile_number, nullptr);
-    if (image_buffer == nullptr || mask_buffer == nullptr) {
+    if (image_buffer == nullptr) {
       continue;
     }
 
     BufferType mutable_buffer = image_data.data_buffers.lookup_default(tile_data.tile_number,
                                                                        BufferType{});
-    BufferType mutable_mask_buffer = mask_data.data_buffers.lookup_default(tile_data.tile_number,
-                                                                           BufferType{});
     if (std::holds_alternative<std::monostate>(mutable_buffer)) {
       BLI_assert_unreachable();
       continue;
     }
-    if (std::holds_alternative<std::monostate>(mutable_mask_buffer)) {
-      BLI_assert_unreachable();
-      continue;
+
+    ImBuf *mask_buffer = nullptr;
+    BufferType mutable_mask_buffer;
+    if (mask_data != nullptr) {
+      mask_buffer = mask_data->image_buffers.lookup_default(tile_data.tile_number, nullptr);
+      mutable_mask_buffer = mask_data->data_buffers.lookup_default(tile_data.tile_number,
+                                                                   BufferType{});
+      if (std::holds_alternative<std::monostate>(mutable_mask_buffer)) {
+        BLI_assert_unreachable();
+        continue;
+      }
     }
+    const bool use_stencil_mask = mask_buffer == nullptr ? false :
+                                                           (paint_settings.flag &
+                                                            IMAGEPAINT_PROJECT_LAYER_STENCIL) != 0;
 
     const TileColorspaceProcessor *processors = image_data.processors.lookup_ptr(
         tile_data.tile_number);
@@ -676,7 +684,7 @@ static void do_paint_pixels(const PaintBlendSettings &blend_settings,
             calc_brush_texture_factors(
                 PaintMode::Texture3D, ss, brush, tri_positions, tri_factors);
             scale_factors(tri_factors, cache.bstrength);
-            if (!is_mask_brush && (paint_settings.flag & IMAGEPAINT_PROJECT_LAYER_STENCIL) != 0) {
+            if (!is_mask_brush && use_stencil_mask) {
               int2 image_size = int2(image_buffer->x, image_buffer->y);
               int2 mask_size = int2(mask_buffer->x, mask_buffer->y);
               if (std::holds_alternative<MutableSpan<float4>>(mutable_mask_buffer)) {
@@ -868,7 +876,7 @@ void do_3d_image_paint_brush(const Depsgraph &depsgraph,
                              const Brush &brush,
                              Object &ob,
                              ImageData &image_data,
-                             ImageData &mask_data,
+                             ImageData *mask_data,
                              const IndexMask &node_mask)
 {
   PRF_scope(ProfileCategory::Editor);
@@ -888,9 +896,11 @@ void do_3d_image_paint_brush(const Depsgraph &depsgraph,
   node_mask.foreach_index([&](const int i) {
     fetch_image_buffers(image_data, nodes[i], pixel_nodes[i], is_mask_brush);
   });
-  node_mask.foreach_index([&](const int i) {
-    fetch_image_buffers(mask_data, nodes[i], pixel_nodes[i], is_mask_brush);
-  });
+  if (mask_data != nullptr) {
+    node_mask.foreach_index([&](const int i) {
+      fetch_image_buffers(*mask_data, nodes[i], pixel_nodes[i], is_mask_brush);
+    });
+  }
 
   const Span<float3> positions = bke::pbvh::vert_positions_eval(depsgraph, ob);
 

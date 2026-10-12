@@ -60,7 +60,7 @@ void do_3d_image_paint_brush(const Depsgraph &depsgraph,
                              const Brush &brush,
                              Object &ob,
                              ImageData &image_data,
-                             ImageData &mask_data,
+                             ImageData *mask_data,
                              const IndexMask &node_mask);
 /** \} */
 }  // namespace blender::ed::sculpt_paint::image
