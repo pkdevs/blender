@@ -24,12 +24,14 @@
 #include "DNA_windowmanager_types.h"
 
 #include "BLI_listbase_iterator.hh"
+#include "BLI_math_vector_c.hh"
 #include "BLI_string_ref.hh"
 #include "BLI_sys_types.hh"
 
 #include "BKE_attribute.h"
 #include "BKE_attribute.hh"
 #include "BKE_camera.h"
+#include "BKE_colorband.hh"
 #include "BKE_compositor.hh"
 #include "BKE_main.hh"
 #include "BKE_mesh_legacy_convert.hh"
@@ -633,6 +635,61 @@ void blo_do_versions_503(FileData * /*fd*/, Library * /*lib*/, Main *bmain)
           if (space.spacetype == SPACE_OUTLINER) {
             SpaceOutliner *space_outliner = reinterpret_cast<SpaceOutliner *>(&space);
             space_outliner->flag &= ~SO_EXPAND_ON_FOCUS;
+          }
+        }
+      }
+    }
+  }
+
+  if (!MAIN_VERSION_FILE_ATLEAST(bmain, 503, 25)) {
+    for (Material &materials : bmain->materials) {
+      if (materials.gp_style == nullptr) {
+        continue;
+      }
+
+      if (materials.gp_style->fill_style != GP_MATERIAL_FILL_STYLE_GRADIENT) {
+        continue;
+      }
+
+      materials.gp_style->gradient = BKE_colorband_add(true);
+
+      if (materials.gp_style->flag & GP_MATERIAL_FLIP_FILL) {
+        copy_v4_v4(&materials.gp_style->gradient->data[0].r, materials.gp_style->mix_rgba);
+        copy_v4_v4(&materials.gp_style->gradient->data[1].r, materials.gp_style->fill_rgba);
+      }
+      else {
+        copy_v4_v4(&materials.gp_style->gradient->data[0].r, materials.gp_style->fill_rgba);
+        copy_v4_v4(&materials.gp_style->gradient->data[1].r, materials.gp_style->mix_rgba);
+      }
+
+      /* This flag is now deprecated. */
+      materials.gp_style->flag &= ~GP_MATERIAL_FLIP_FILL;
+    }
+  }
+
+  if (!MAIN_VERSION_FILE_ATLEAST(bmain, 503, 26)) {
+    for (Scene &scene : bmain->scenes) {
+      SequencerToolSettings *sequencer_tool_settings = seq::tool_settings_ensure(&scene);
+      sequencer_tool_settings->ripple_flag = SEQ_RIPPLE_ALL_CHANNELS | SEQ_RIPPLE_MARKERS |
+                                             SEQ_RIPPLE_CLEAR_RANGES;
+    }
+  }
+
+  if (!MAIN_VERSION_FILE_ATLEAST(bmain, 503, 28)) {
+    /* Some old files have node editors without a sidebar region. */
+    for (bScreen &screen : bmain->screens) {
+      for (ScrArea &area : screen.areabase) {
+        for (SpaceLink &space : area.spacedata) {
+          if (space.spacetype != SPACE_NODE) {
+            continue;
+          }
+          ListBaseT<ARegion> *regionbase = (&space == area.spacedata.first_) ? &area.regionbase :
+                                                                               &space.regionbase;
+          if (ARegion *new_sidebar = do_versions_add_region_if_not_found(
+                  regionbase, RGN_TYPE_UI, "node editor sidebar", RGN_TYPE_HEADER))
+          {
+            new_sidebar->alignment = RGN_ALIGN_RIGHT;
+            new_sidebar->flag |= RGN_FLAG_HIDDEN;
           }
         }
       }

@@ -444,7 +444,7 @@ bool RNA_validate_identifier(const char *identifier, bool is_property, const cha
       "return", "try",  "while",  "with",   "yield",    nullptr,
   };
 
-  if (!isalpha(identifier[0])) {
+  if (!isalpha(identifier[0]) && identifier[0] != '_') {
     if (r_error) {
       *r_error = "first character failed isalpha() check";
     }
@@ -527,7 +527,7 @@ void RNA_identifier_sanitize(char *identifier, bool is_property)
       "raise",  "return", "try",    "while",   "with",     "yield",    nullptr,
   };
 
-  if (!isalpha(identifier[0])) {
+  if (!isalpha(identifier[0]) && identifier[0] != '_') {
     /* first character failed isalpha() check */
     identifier[0] = '_';
   }
@@ -4696,9 +4696,10 @@ FunctionRNA *RNA_def_function(StructRNA *srna, const char *identifier_c_str, con
 
   const UString identifier(identifier_c_str);
 
-  if (std::find_if(srna->functions.begin(), srna->functions.end(), [&](const auto &func) {
-        return func->identifier == identifier;
-      }) != srna->functions.end())
+  if (std::find_if(srna->functions.begin(),
+                   srna->functions.end(),
+                   [&](const auto &func) { return func->identifier == identifier; }) !=
+      srna->functions.end())
   {
     CLOG_ERROR(&LOG, "%s.%s already defined.", srna->identifier.c_str(), identifier.c_str());
     return nullptr;
