@@ -65,6 +65,10 @@ bool GHOST_ios_document_window_visible();
 /** `UIView *`: a snapshot of the document window, while it shows, or null. */
 void *GHOST_ios_document_window_snapshot();
 
+/** Whether the GPU has caught up with Blender's frames, so it may draw the next. Drawing further
+ * ahead only queues frames, which then show late or not at all. */
+bool GHOST_ios_gpu_ready();
+
 /** Cleared when the window closes: native work for it, such as a dialog, must stop then. */
 std::shared_ptr<std::atomic<bool>> GHOST_ios_window_alive(GHOST_WindowIOS *window);
 /** Whether the window's viewport has shown its first frame. Never waits for Blender. */

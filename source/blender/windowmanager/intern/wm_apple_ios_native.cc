@@ -33,6 +33,9 @@
 #  include "WM_types.hh"
 
 #  include "wm_apple_ios_file.hh"
+#  include "wm_draw.hh"
+#  include "wm_event_system.hh"
+#  include "wm_window.hh"
 
 namespace blender {
 
@@ -156,11 +159,19 @@ wmNativeInterface native_interface_create()
   return native;
 }
 
-/** One pass of Blender's loop, run by GHOST on its engine thread. */
+/** One pass of Blender's loop, run by GHOST on its engine thread, see #WM_main_loop_body. */
 void engine_step(bContext *C)
 {
   WM_apple_ios_ui_flush_commands(C);
-  WM_main_loop_body(C);
+  wm_window_events_process(C);
+  wm_event_do_handlers(C);
+  wm_event_do_notifiers(C);
+  /* Input is always taken, but drawing waits for the GPU to catch up: the next frame then shows
+   * all input since, instead of queuing behind frames still to be rendered. GHOST wakes this loop
+   * as a frame completes. */
+  if (GHOST_ios_gpu_ready()) {
+    wm_draw_update(C);
+  }
 }
 
 GHOST_IOSNativeInterface ghost_interface_create()

@@ -30,8 +30,9 @@ class GHOST_IOSSurface : public std::enable_shared_from_this<GHOST_IOSSurface> {
   std::atomic<uint64_t> size_{(uint64_t(1) << 32) | 1};
   std::mutex frame_mutex_;
   std::shared_ptr<Frame> completed_;
-  /* Pool access is engine-only. References held by GPU completion/presentation prevent reuse. */
-  std::shared_ptr<Frame> pool_[3];
+  /* Pool access is engine-only. References held by GPU completion/presentation prevent reuse:
+   * the frames in flight, the newest completed one and the one being presented. */
+  std::shared_ptr<Frame> pool_[4];
 
   void present();
   void presentationFinished(bool retry = false);

@@ -6,6 +6,8 @@
 #import <UIKit/UIKit.h>
 
 #import "GHOST_IOSPlatform.hh"
+#include "GHOST_IOSNativeInterface.hh"
+#include "GHOST_IOSRuntime.hh"
 
 #include <algorithm>
 #include <atomic>
@@ -65,6 +67,27 @@ static void frame_presented()
       [[GHOSTIOSFrameRateRequest shared] start];
     });
   }
+}
+
+/** \} */
+
+/* -------------------------------------------------------------------- */
+/** \name Frame Pacing
+ *
+ * Blender draws as soon as input or a change asks for it, and the GPU runs behind it. Once the
+ * GPU takes longer than a display frame, as with heavy geometry filling the viewport, frames
+ * queued faster than it finishes them pile up: each shows later than the last, and most are
+ * dropped unseen after costing a full render. Blender draws only while the GPU has caught up,
+ * so it skips ahead to the newest state instead.
+ * \{ */
+
+/** Frames the GPU may work on at once: Blender starts a frame once the last has finished. */
+static constexpr int max_frames_in_flight = 1;
+static std::atomic<int> frames_in_flight{0};
+
+bool GHOST_ios_gpu_ready()
+{
+  return frames_in_flight.load() < max_frames_in_flight;
 }
 
 /** \} */
@@ -190,6 +213,9 @@ bool GHOST_IOSSurface::publish(id<MTLCommandQueue> rendering_queue, id<MTLTextur
   [encoder copyFromTexture:source toTexture:frame->texture];
   [encoder endEncoding];
   auto self = shared_from_this();
+  /* The copy follows the frame's rendering on the same queue: when it completes, so has the
+   * frame, and Blender may draw the next. */
+  frames_in_flight++;
   [buffer addCompletedHandler:^(id<MTLCommandBuffer> completed) {
     if (completed.status == MTLCommandBufferStatusCompleted && !self->closed_.load()) {
       {
@@ -198,6 +224,8 @@ bool GHOST_IOSSurface::publish(id<MTLCommandQueue> rendering_queue, id<MTLTextur
       }
       self->requestPresent();
     }
+    frames_in_flight--;
+    GHOST_ios_engine_wake();
   }];
   [buffer commit];
   return true;
