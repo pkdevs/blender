@@ -10,7 +10,7 @@
  *
  * References:
  *
- *  [evas2002]  Matthias Zwicker et al.
+ *  [ewas2002]  Matthias Zwicker et al.
  *              EWA Splatting
  *              IEEE TVCG 2002
  *              https://www.cs.umd.edu/~zwicker/publications/EWASplatting-TVCG02.pdf
@@ -296,7 +296,7 @@ float3x3 get_covmat(Quaternion rotation, float3 scale)
  * Compute perspective-projected 2D covariance matrix for a Gaussian ellipse, from the
  * covariance matrix of the 3D ellipsoid.
  *
- * \note Reproduces eq. 29 and eq. 31 in [evas2002], with aspect/scaling tweaks from the
+ * \note Reproduces eq. 29 and eq. 31 in [ewas2002], with aspect/scaling tweaks from the
  *       code of [3dgs2023], and a slightly modified Jacobian for orthographic cameras.
  * \note The 2d covmatrix is of form [[x, y], [y, z]], and returned as [x, y, z].
  */
@@ -316,7 +316,7 @@ float3 project_covmat(float3 lP,
   float lim_x = 1.3f * tan_fov_x;
   float lim_y = 1.3f * tan_fov_y;
 
-  /* Parameter `t` in [ewas2023], effectively projected point. */
+  /* Parameter `t` in [ewas2002], effectively projected point. */
   float3 vP = transform_point(viewmat, lP);
   vP.x = clamp(vP.x / vP.z, -lim_x, lim_x) * vP.z;
   vP.y = clamp(vP.y / vP.z, -lim_y, lim_y) * vP.z;
