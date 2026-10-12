@@ -269,6 +269,10 @@ void screen_stop_playback(Main *bmain, wmWindowManager *wm, wmWindow *win, bScre
 void SCREEN_OT_screenshot(wmOperatorType *ot);
 void SCREEN_OT_screenshot_area(wmOperatorType *ot);
 
+/* `workspace_3dview_sync.cc` */
+
+void workspace_change_sync_3d_views(const bScreen *screen_old, const bScreen *screen_new);
+
 /* `workspace_layout_edit.cc` */
 
 bool workspace_layout_set_poll(const WorkSpaceLayout *layout);

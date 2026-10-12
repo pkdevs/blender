@@ -27,6 +27,7 @@ set(SRC
   screen_ops.cc
   screen_user_menu.cc
   screendump.cc
+  workspace_3dview_sync.cc
   workspace_edit.cc
   workspace_layout_edit.cc
   workspace_listen.cc
