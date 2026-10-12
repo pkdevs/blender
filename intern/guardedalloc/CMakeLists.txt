@@ -64,4 +64,10 @@ if(WITH_GTESTS)
     bf_blenlib
   )
   blender_add_test_suite_executable(guardedalloc "${TEST_SRC}" "${INC};${TEST_INC}" "${INC_SYS}" "${LIB};${TEST_LIB}")
+
+  set(TEST_SRC
+    tests/guardedalloc_performance_test.cc
+    tests/guardedalloc_test_base.h
+  )
+  blender_add_test_performance_executable(guardedalloc_performance "${TEST_SRC}" "${INC};${TEST_INC}" "${INC_SYS}" "${LIB};${TEST_LIB}")
 endif()
