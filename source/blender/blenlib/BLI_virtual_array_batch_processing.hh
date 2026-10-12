@@ -418,11 +418,11 @@ inline void execute_element_fn_with_params(ElementFn &&element_fn,
       return param.get_implementation();
     }
     else if constexpr (category == ParamCategory::Output) {
-      /* TODO: Assert this is span-like and has the right type at runtime. */
+      assert_value_type<T>(param);
       return static_cast<T *>(param.data());
     }
     else if constexpr (category == ParamCategory::Mutable) {
-      /* TODO: Assert this is span-like and has the right type at runtime. */
+      assert_value_type<T>(param);
       return static_cast<T *>(param.data());
     }
     else {
@@ -527,13 +527,12 @@ template<typename In1,
          typename Out1,
          typename ElementFn,
          ExecPresetC ExecPreset = exec_presets::Materialized>
-inline void batch_process__2_varray_in__1_span_out(
-    const IndexMask &mask,
-    const VArray<In1> &in1,
-    const VArray<In2> &in2,
-    MutableSpan<Out1> out1,
-    ElementFn &&element_fn,
-    const ExecPreset &exec_preset = exec_presets::Materialized())
+inline void batch_process__2in__1out(const IndexMask &mask,
+                                     const VArray<In1> &in1,
+                                     const VArray<In2> &in2,
+                                     MutableSpan<Out1> out1,
+                                     ElementFn &&element_fn,
+                                     const ExecPreset &exec_preset = exec_presets::Materialized())
 {
   batch_process__n_in__1_out<ElementFn, ExecPreset, Out1, In1, In2>(
       mask, exec_preset, in1, in2, out1, std::forward<ElementFn>(element_fn));

@@ -509,6 +509,9 @@ inline constexpr bool
  *   allowed and could result in hard to find bugs.
  */
 template<typename T> class VArrayCommon {
+ public:
+  using value_type = T;
+
  protected:
   AnyDerived<const VArrayImpl<T>> impl_;
 
@@ -699,15 +702,6 @@ template<typename T> class VArrayCommon {
   const VArrayImpl<T> *get_implementation() const
   {
     return impl_.get();
-  }
-
-  /**
-   * Checks whether this #VArray is of a specific type at compile time. This mainly exists for
-   * compatibility with GVArrayCommon::is_type.
-   */
-  template<typename U> constexpr bool is_type() const
-  {
-    return std::is_same_v<T, U>();
   }
 };
 
@@ -1177,7 +1171,12 @@ template<typename T, bool UseSingle, bool UseSpan> struct VArrayDevirtualizer {
   template<typename VArrayT>
   VArrayDevirtualizer(const VArrayT &varray) : info_(varray.common_info()), size_(varray.size())
   {
-    BLI_assert(varray.template is_type<T>());
+    assert_value_type<T>(varray);
+  }
+
+  VArrayDevirtualizer(CommonVArrayInfo info, const int64_t size)
+      : info_(std::move(info)), size_(size)
+  {
   }
 
   template<typename Fn> bool devirtualize(const Fn &fn) const
