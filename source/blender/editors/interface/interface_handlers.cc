@@ -12866,7 +12866,9 @@ static int region_handler(bContext *C, const wmEvent *event, void * /*userdata*/
         region->runtime->flag &= ~bke::ARegionRuntimeFlag::HUD_DRAG;
       }
     }
-    else if ((region->runtime->flag & bke::ARegionRuntimeFlag::HUD_DRAG) && event->type == MOUSEMOVE) {
+    else if ((region->runtime->flag & bke::ARegionRuntimeFlag::HUD_DRAG) &&
+             event->type == MOUSEMOVE)
+    {
       int diff[2];
       sub_v2_v2v2_int(diff, event->xy, event->prev_xy);
       region->runtime->offset_x += diff[0];
