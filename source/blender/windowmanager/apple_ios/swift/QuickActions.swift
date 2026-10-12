@@ -6,10 +6,10 @@
  * The row along the bottom of the document window: quick actions for what is selected, Blender's
  * full context menu, and Adjust Last Operation.
  *
- * Folded, the actions are an "Actions" pill. Open, they are a row of glass buttons centered on
- * the viewport, ending with the context menu. The last operation is a pill beside them, opening
- * into a strip of its settings. Only one of the two is open at a time. Glass morphs between the
- * pills and what they open into.
+ * Folded, the actions are an "Actions" pill. Open, they are a bar like an edit menu, centered on
+ * the viewport: a close button, the actions' titles, and a button for the full context menu. The
+ * last operation is a pill beside them, opening into a strip of its settings. Only one of the two
+ * is open at a time. Each pill grows into what it opens, and folds back into it.
  */
 
 import SwiftUI
@@ -24,6 +24,9 @@ enum ShellMetrics {
   static let rowHeight: CGFloat = 56
   static let buttonHeight: CGFloat = 44
   static let actionsPillWidth: CGFloat = 88
+  /** The open quick actions, a capsule with a circle at either end. */
+  static let barHeight: CGFloat = 50
+  static let barCircle: CGFloat = 42
   /** From the bottom edge of the safe area. */
   static let rowBottom: CGFloat = 6
   /** Wide enough for the strip to open in the row itself, beside the actions. */
@@ -152,6 +155,72 @@ struct QuickActionButton: View {
   }
 }
 
+/** A quick action in the bar: its title, as an edit menu's. */
+struct QuickActionBarItem: View {
+  let action: QuickAction
+  let model: ShellModel
+
+  private var destructive: Bool {
+    action.icon == "TRASH" || action.operatorName.hasSuffix(".delete")
+  }
+
+  var body: some View {
+    Button {
+      action.run(in: model)
+    } label: {
+      label
+        .padding(.horizontal, action.axis ? 12 : 14)
+        .frame(height: ShellMetrics.barCircle)
+        .frame(minWidth: action.axis ? 52 : nil)
+        .background {
+          if action.selected {
+            Capsule().fill(action.axis ? action.axisColor : Color(uiColor: .systemBlue))
+          }
+        }
+        .contentShape(Capsule())
+    }
+    .buttonStyle(QuickActionPressStyle(shape: Capsule()))
+    .accessibilityLabel(action.axis ? "\(action.key) axis constraint" : action.title)
+    .accessibilityValue(action.axis ? (action.selected ? "On" : "Off") : "")
+    .accessibilityAddTraits(action.selected ? .isSelected : [])
+    .accessibilityIdentifier(action.action.isEmpty ? action.operatorName : "blender.action.\(action.action)")
+  }
+
+  @ViewBuilder
+  private var label: some View {
+    if action.axis {
+      /* Black lettering stays readable on the bright axis color. */
+      HStack(spacing: action.selected ? 4 : 0) {
+        Text(action.key)
+          .font(.system(size: 17, weight: .semibold))
+        if action.selected {
+          Image(systemName: "checkmark")
+            .font(.system(size: 11, weight: .bold))
+        }
+      }
+      .foregroundStyle(action.selected ? Color.black : action.axisColor)
+    }
+    else {
+      Text(action.title)
+        .font(.system(size: 17))
+        .lineLimit(1)
+        .foregroundStyle(action.selected ? Color.white :
+                           destructive ? Color(uiColor: .systemRed) : Color.primary)
+    }
+  }
+}
+
+/** Highlights a control on the bar while it is pressed. */
+struct QuickActionPressStyle<S: Shape>: ButtonStyle {
+  let shape: S
+
+  func makeBody(configuration: Configuration) -> some View {
+    configuration.label
+      .background(shape.fill(Color.primary.opacity(configuration.isPressed ? 0.14 : 0)))
+      .animation(.easeOut(duration: 0.12), value: configuration.isPressed)
+  }
+}
+
 /** \} */
 
 /* -------------------------------------------------------------------- */
@@ -168,10 +237,9 @@ struct QuickActionsRow: View {
   @State private var shownError: String?
   /** The strip hugs its settings, measured as they lay out. */
   @State private var redoContentWidth: CGFloat = 0
-  @State private var actionsWidth: CGFloat = 0
-  @State private var actionsScrollWidth: CGFloat = 0
+  /** The actions' own width in the bar, measured ahead of opening it. */
+  @State private var actionItemsWidth: CGFloat = 0
   @AppStorage(SettingsModel.showQuickActionsKey) private var showQuickActions = true
-  @Namespace private var glass
 
   private var actions: [QuickAction] {
     showQuickActions ? QuickAction.list(model.actions) : []
@@ -212,7 +280,9 @@ struct QuickActionsRow: View {
       let laneWidth = max(0, hotspot - 12 - laneLeading)
       let wide = width >= ShellMetrics.wideRow
       let pillWidth = redoTitle.map(redoPillWidth) ?? 0
-      /* The pill follows the actions in the row, so the row is measured without it. */
+      let barWidth = actionsBarWidth(maxWidth: laneWidth - (redoPillTitle != nil ? 8 + pillWidth : 0))
+      let actionsWidth = actions.isEmpty ? 0 : actionsOpen ? barWidth : ShellMetrics.actionsPillWidth
+      /* The redo pill follows the actions in the row. */
       let rowWidth = actionsWidth + (redoPillTitle != nil ? (actionsWidth > 0 ? 8 : 0) + pillWidth : 0)
       /* Folded, the pills rest beside the tool rail; open, the row centers on the viewport,
        * staying in the lane. */
@@ -223,13 +293,15 @@ struct QuickActionsRow: View {
         /* Merging only glass that touches, so neighbouring buttons stay separate capsules. */
         PanelGlassGroup(spacing: 2) {
           ZStack(alignment: .leading) {
-            actionsGroup(laneWidth: laneWidth)
-              .fixedSize()
-              .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { actionsWidth = $0 }
-              .offset(x: rowX)
+            if !actions.isEmpty {
+              actionsMorph(frame: CGRect(x: rowX, y: 0, width: actionsWidth,
+                                         height: actionsOpen ? ShellMetrics.barHeight : ShellMetrics.buttonHeight),
+                           itemsWidth: barWidth - actionsBarChrome)
+            }
             if let title = redoTitle {
               redoMorph(title: title, frame: redoOpen ?
-                          stripFrame(width: width, laneLeading: laneLeading, laneWidth: laneWidth, wide: wide) :
+                          stripFrame(width: width, laneLeading: laneLeading, laneWidth: laneWidth, wide: wide,
+                                     actionsWidth: actionsWidth) :
                           CGRect(x: rowX + rowWidth - pillWidth, y: 0, width: pillWidth,
                                  height: ShellMetrics.buttonHeight))
             }
@@ -274,76 +346,109 @@ struct QuickActionsRow: View {
   /* -------------------------------------------------------------------- */
   /* Actions */
 
-  @ViewBuilder
-  private func actionsGroup(laneWidth: CGFloat) -> some View {
-    if actionsOpen && !actions.isEmpty {
-      HStack(spacing: 8) {
-        toggle
-        ScrollView(.horizontal, showsIndicators: false) {
-          /* Glass of their own inside the scroll view, which clips it as they scroll. */
-          PanelGlassGroup(spacing: 2) {
-            HStack(spacing: 4) {
-              ForEach(actions) { action in
-                QuickActionButton(action: action, model: model)
-              }
-            }
-          }
-          .padding(6)
-          .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { actionsScrollWidth = $0 }
+  /** The bar's circles at either end and their margins, beside the actions. */
+  private var actionsBarChrome: CGFloat {
+    8 + ShellMetrics.barCircle + (contextMenuAvailable ? ShellMetrics.barCircle : 0)
+  }
+
+  /** The bar hugs its actions, which scroll when the lane is narrower. */
+  private func actionsBarWidth(maxWidth: CGFloat) -> CGFloat {
+    actionsBarChrome + min(ceil(actionItemsWidth), max(0, maxWidth - actionsBarChrome))
+  }
+
+  /** The actions as an edit menu's: titles between hairlines, deleting in red. */
+  private var actionItems: some View {
+    HStack(spacing: 0) {
+      ForEach(Array(actions.enumerated()), id: \.element.id) { index, action in
+        if index > 0 {
+          Rectangle()
+            .fill(Color.primary.opacity(0.2))
+            .frame(width: 1, height: 22)
         }
-        .softHorizontalScrollEdge()
-        .scrollBounceBehavior(.basedOnSize, axes: .horizontal)
-        /* As wide as the actions, scrolling when the lane is narrower. */
-        .frame(width: min(actionsScrollWidth, max(0, laneWidth - 44 - 16 - (contextMenuAvailable ? 52 : 0) -
-                                              (redoPillTitle != nil ? 144 : 0))))
-        if contextMenuAvailable {
-          ContextMenuButton()
-          .frame(width: ShellMetrics.buttonHeight, height: ShellMetrics.buttonHeight)
-          .panelGlass(interactive: true, in: Circle())
-          .panelGlassID("context", in: glass)
-          .accessibilityIdentifier("blender.context-menu")
-        }
+        QuickActionBarItem(action: action, model: model)
       }
-      .transition(.opacity.combined(with: .offset(x: -20)))
-    }
-    else if !actions.isEmpty {
-      toggle
     }
   }
 
-  private var toggle: some View {
-    Button {
-      withAnimation(animation) {
-        actionsOpen.toggle()
-        /* Only one may be open: the actions fold the strip. */
-        if actionsOpen { redoOpenID = nil }
-      }
-    } label: {
-      Group {
-        if actionsOpen {
-          Image(systemName: "xmark")
-            .font(.system(size: 17, weight: .semibold))
-            .frame(width: ShellMetrics.buttonHeight)
+  private func toggleActions() {
+    withAnimation(animation) {
+      actionsOpen.toggle()
+      /* Only one may be open: the actions fold the strip. */
+      if actionsOpen { redoOpenID = nil }
+    }
+  }
+
+  /**
+   * The pill and the bar are one glass capsule: opening grows the pill into the bar, centered on
+   * the viewport, and the close button at its leading end folds it back into the pill.
+   */
+  private func actionsMorph(frame: CGRect, itemsWidth: CGFloat) -> some View {
+    ZStack(alignment: .leading) {
+      if actionsOpen {
+        HStack(spacing: 0) {
+          Button(action: toggleActions) {
+            Image(systemName: "xmark")
+              .font(.system(size: 15, weight: .semibold))
+              .foregroundStyle(.primary)
+              .frame(width: ShellMetrics.barCircle, height: ShellMetrics.barCircle)
+              .background(Circle().fill(Color.primary.opacity(0.1)))
+              .contentShape(Circle())
+          }
+          .buttonStyle(QuickActionPressStyle(shape: Circle()))
+          .accessibilityLabel("Hide Quick Actions")
+          .accessibilityValue("Expanded")
+          .accessibilityIdentifier("blender.quick-actions.toggle")
+          .help("Hide Quick Actions")
+          ScrollView(.horizontal, showsIndicators: false) {
+            actionItems
+          }
+          .softHorizontalScrollEdge()
+          .scrollBounceBehavior(.basedOnSize, axes: .horizontal)
+          .frame(width: max(0, itemsWidth))
+          if contextMenuAvailable {
+            ContextMenuButton(systemImage: "chevron.right", size: ShellMetrics.barCircle)
+              .font(.system(size: 17, weight: .semibold))
+              .background(Circle().fill(Color.primary.opacity(0.1)))
+          }
         }
-        else {
+        .padding(.horizontal, 4)
+        .frame(height: frame.height)
+        .transition(.opacity)
+      }
+      else {
+        Button(action: toggleActions) {
           Text("Actions")
             .lineLimit(1)
             .minimumScaleFactor(0.7)
+            .foregroundStyle(.primary)
             .frame(width: ShellMetrics.actionsPillWidth - 20)
             .padding(.horizontal, 10)
+            .frame(height: ShellMetrics.buttonHeight)
+            .contentShape(Capsule())
         }
+        .buttonStyle(.plain)
+        .accessibilityLabel("Show Quick Actions")
+        .accessibilityValue("Collapsed")
+        .accessibilityIdentifier("blender.quick-actions.toggle")
+        .help("Show Quick Actions")
+        .transition(.opacity)
       }
-      .foregroundStyle(.primary)
-      .frame(height: ShellMetrics.buttonHeight)
-      .contentShape(Capsule())
     }
-    .buttonStyle(.plain)
-    .panelGlass(interactive: true, in: Capsule())
-    .panelGlassID("actions", in: glass)
-    .accessibilityLabel(actionsOpen ? "Hide Quick Actions" : "Show Quick Actions")
-    .accessibilityValue(actionsOpen ? "Expanded" : "Collapsed")
-    .accessibilityIdentifier("blender.quick-actions.toggle")
-    .help(actionsOpen ? "Hide Quick Actions" : "Show Quick Actions")
+    .frame(width: frame.width, height: frame.height, alignment: .leading)
+    .background {
+      /* Measured ahead of opening, so the bar grows straight to its width. */
+      actionItems
+        .fixedSize()
+        .hidden()
+        .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { width in
+          if abs(width - actionItemsWidth) > 0.5 { actionItemsWidth = width }
+        }
+    }
+    .clipShape(Capsule())
+    /* Not interactive glass once open, which would take the touches of the actions on it. */
+    .panelGlass(interactive: !actionsOpen, in: Capsule())
+    .offset(x: frame.minX)
+    .animation(animation, value: actions)
   }
 
   /* -------------------------------------------------------------------- */
@@ -361,7 +466,8 @@ struct QuickActionsRow: View {
   }
 
   /** Where the strip opens, in the row's space, centered on its y. */
-  private func stripFrame(width: CGFloat, laneLeading: CGFloat, laneWidth: CGFloat, wide: Bool) -> CGRect {
+  private func stripFrame(width: CGFloat, laneLeading: CGFloat, laneWidth: CGFloat, wide: Bool,
+                          actionsWidth: CGFloat) -> CGRect {
     if wide {
       /* Opened in the row, after the Actions pill, centered on the viewport. */
       let start = laneLeading + actionsWidth + (actionsWidth > 0 ? 8 : 0)

@@ -229,12 +229,15 @@ struct BlenderMenuButton: View {
 
 /** Every action for what is selected, as Blender's right-click menu lists them. */
 struct ContextMenuButton: View {
+  var systemImage = "ellipsis"
+  var size: CGFloat = 44
+
   var body: some View {
     Menu {
       BlenderMenuItems(route: BlenderMenus.contextRoute)
     } label: {
-      Image(systemName: "ellipsis")
-        .frame(width: 44, height: 44)
+      Image(systemName: systemImage)
+        .frame(width: size, height: size)
         .contentShape(Rectangle())
     }
     .tint(.primary)
