@@ -8,7 +8,7 @@
 #include "BLI_generic_virtual_array.hh"
 #include "BLI_parameter_pack_utils.hh"
 
-namespace blender::varray_batch {
+namespace blender::varray_exec {
 
 enum class ParamCategory {
   Input,
@@ -464,13 +464,13 @@ inline void execute_element_fn_with_params(ElementFn &&element_fn,
   if (!executed_devirtualized) {
     /* The materialized method is most common because it avoids most virtual function overhead but
      * still instantiates the function only once. */
-    if constexpr (ExecPreset::fallback_mode == varray_batch::FallbackMode::Materialized) {
+    if constexpr (ExecPreset::fallback_mode == varray_exec::FallbackMode::Materialized) {
       mask.foreach_segment([&](const IndexMaskSegment segment) {
-        varray_batch::batch_process<64>(TypeSequence<ParamTags...>(),
-                                        std::index_sequence<I...>(),
-                                        element_fn,
-                                        segment,
-                                        loaded_params);
+        varray_exec::batch_process<64>(TypeSequence<ParamTags...>(),
+                                       std::index_sequence<I...>(),
+                                       element_fn,
+                                       segment,
+                                       loaded_params);
       });
     }
     else {
@@ -538,4 +538,4 @@ inline void batch_process__2in__1out(const IndexMask &mask,
       mask, exec_preset, in1, in2, out1, std::forward<ElementFn>(element_fn));
 }
 
-}  // namespace blender::varray_batch
+}  // namespace blender::varray_exec

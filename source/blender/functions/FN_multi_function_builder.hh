@@ -10,7 +10,7 @@
  * This file contains several utilities to create multi-functions with less redundant code.
  */
 
-#include "BLI_virtual_array_batch_processing.hh"
+#include "BLI_virtual_array_exec.hh"
 
 #include "FN_multi_function.hh"
 
@@ -18,12 +18,12 @@ namespace blender {
 
 namespace fn::multi_function::build {
 
-using varray_batch::ParamCategory;
-using varray_batch::ParamTag;
+using varray_exec::ParamCategory;
+using varray_exec::ParamTag;
 
 namespace exec_presets {
 
-using namespace varray_batch::exec_presets;
+using namespace varray_exec::exec_presets;
 
 }  // namespace exec_presets
 
@@ -37,7 +37,7 @@ inline void execute_element_fn_as_multi_function(const ElementFn &element_fn,
                                                  TypeSequence<ParamTags...> /*param_tags*/,
                                                  std::index_sequence<I...> /*indices*/)
 {
-  varray_batch::execute_element_fn_with_params(
+  varray_exec::execute_element_fn_with_params(
       element_fn,
       exec_preset,
       mask,
