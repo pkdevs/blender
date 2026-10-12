@@ -106,7 +106,18 @@ if(WITH_OPENSUBDIV)
 endif()
 
 if(WITH_USD)
-  find_package(USD REQUIRED)
+  find_package(pxr REQUIRED CONFIG)
+  get_filename_component(USD_LIBRARY_DIR ${PXR_usd_LIBRARY} DIRECTORY)
+  set(USD_INCLUDE_DIR ${PXR_INCLUDE_DIRS})
+  set(USD_LIBRARIES ${PXR_LIBRARIES})
+  # USD generates the python target when build with Python support.
+  # Ideally we would have better way to identify if USD is build with Python or not.
+  # Previous code used `if(EXISTS ${USD_INCLUDE_DIR}/pxr/base/tf/pyModule.h)`.
+  if(TARGET python)
+    set(USD_PYTHON_SUPPORT ON)
+  endif()
+  set_and_warn_library_found("USD" pxr_FOUND WITH_USD)
+  set_and_warn_library_found("Hydra" pxr_FOUND WITH_HYDRA)
 endif()
 add_bundled_libraries(usd/lib)
 

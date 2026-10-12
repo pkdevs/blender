@@ -2087,7 +2087,7 @@ if((DEFINED LIBDIR) AND TARGETDIR_LIB)
   if(WITH_USD)
     if(WIN32)
       install(DIRECTORY
-        ${USD_LIBRARY_DIR}/lib/usd
+        ${USD_LIBRARY_DIR}/usd
         DESTINATION ${TARGETDIR_LIB}
       )
       install(DIRECTORY ${LIBDIR}/usd/plugin/usd/ DESTINATION "blender.shared/usd")

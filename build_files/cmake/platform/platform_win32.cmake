@@ -944,9 +944,16 @@ endif()
 
 if(WITH_USD)
   set(USD_LIBRARY_DIR ${LIBDIR}/usd)
-  set(USD_DIR ${USD_LIBRARY_DIR}/lib/cmake)
   find_package(pxr REQUIRED CONFIG)
+  get_filename_component(USD_LIBRARY_DIR ${PXR_usd_LIBRARY} DIRECTORY)
+  set(USD_INCLUDE_DIR ${PXR_INCLUDE_DIRS})
   set(USD_LIBRARIES usdImagingGL usdVolImaging)
+  # USD generates the python target when build with Python support.
+  # Ideally we would have better way to identify if USD is build with Python or not.
+  # Previous code used `if(EXISTS ${USD_INCLUDE_DIR}/pxr/base/tf/pyModule.h)`.
+  if(TARGET python)
+    set(USD_PYTHON_SUPPORT ON)
+  endif()
 endif()
 
 if(WITH_MATERIALX)
