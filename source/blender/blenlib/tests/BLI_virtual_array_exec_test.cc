@@ -57,9 +57,12 @@ TEST_F(VirtualArrayExecTest, Execute3in1out)
   VArray<int> in3 = VArray<int>::from_func(4, [](const int64_t i) { return int(i); });
   Array<int> out(4);
   execute_3in_1out<int, int, int, int>(
-      IndexMask(4), in1, in2, in3, out.as_mutable_span(), [](const int a, const int b, const int c) {
-        return a + b + c;
-      });
+      IndexMask(4),
+      in1,
+      in2,
+      in3,
+      out.as_mutable_span(),
+      [](const int a, const int b, const int c) { return a + b + c; });
 
   EXPECT_EQ(out[0], 11);
   EXPECT_EQ(out[1], 13);
@@ -138,8 +141,7 @@ TEST_F(VirtualArrayExecTest, ExecuteMixedInputTypes)
   EXPECT_EQ(out[2], 3.5f);
 }
 
-template<typename ExecPreset>
-static void test_add_with_preset(const ExecPreset &preset)
+template<typename ExecPreset> static void test_add_with_preset(const ExecPreset &preset)
 {
   VArray<int> in1 = VArray<int>::from_container(Array<int>{1, 2, 3, 4});
   VArray<int> in2 = VArray<int>::from_func(4, [](const int64_t i) { return int(i * 10); });
@@ -183,13 +185,13 @@ TEST_F(VirtualArrayExecTest, ExecuteMutable)
   VArray<int> add = VArray<int>::from_single(5, 4);
   Array<int> values{1, 2, 3, 4};
 
-  execute([](const int a, int &value) { value += a; },
-          exec_presets::Materialized(),
-          IndexMask(4),
-          TypeSequence<ParamTag<ParamCategory::Input, int>,
-                       ParamTag<ParamCategory::Mutable, int>>(),
-          add,
-          values.as_mutable_span());
+  execute(
+      [](const int a, int &value) { value += a; },
+      exec_presets::Materialized(),
+      IndexMask(4),
+      TypeSequence<ParamTag<ParamCategory::Input, int>, ParamTag<ParamCategory::Mutable, int>>(),
+      add,
+      values.as_mutable_span());
 
   EXPECT_EQ(values[0], 6);
   EXPECT_EQ(values[1], 7);
@@ -283,13 +285,13 @@ TEST_F(VirtualArrayExecTest, ExecuteSparseMaskMutable)
 
   IndexMaskMemory memory;
   const IndexMask mask = IndexMask::from_indices<int>({0, 2, 5}, memory);
-  execute([](const int a, int &value) { value += a; },
-          exec_presets::Materialized(),
-          mask,
-          TypeSequence<ParamTag<ParamCategory::Input, int>,
-                       ParamTag<ParamCategory::Mutable, int>>(),
-          add,
-          values.as_mutable_span());
+  execute(
+      [](const int a, int &value) { value += a; },
+      exec_presets::Materialized(),
+      mask,
+      TypeSequence<ParamTag<ParamCategory::Input, int>, ParamTag<ParamCategory::Mutable, int>>(),
+      add,
+      values.as_mutable_span());
 
   EXPECT_EQ(values[0], 10);
   EXPECT_EQ(values[1], 1);
@@ -305,12 +307,13 @@ TEST_F(VirtualArrayExecTest, ExecuteGenericOutput)
   Array<int> out(3);
   GMutableSpan generic_out(out.as_mutable_span());
 
-  execute([](const int a, int &out_value) { new (&out_value) int(a / 2); },
-          exec_presets::Simple(),
-          IndexMask(3),
-          TypeSequence<ParamTag<ParamCategory::Input, int>, ParamTag<ParamCategory::Output, int>>(),
-          in,
-          generic_out);
+  execute(
+      [](const int a, int &out_value) { new (&out_value) int(a / 2); },
+      exec_presets::Simple(),
+      IndexMask(3),
+      TypeSequence<ParamTag<ParamCategory::Input, int>, ParamTag<ParamCategory::Output, int>>(),
+      in,
+      generic_out);
 
   EXPECT_EQ(out[0], 1);
   EXPECT_EQ(out[1], 2);
@@ -356,12 +359,13 @@ TEST_F(VirtualArrayExecTest, ExecuteAllSingleInputs)
   VArray<int> in1 = VArray<int>::from_single(3, 5);
   VArray<int> in2 = VArray<int>::from_single(7, 5);
   Array<int> out(5);
-  execute_2in_1out<int, int, int>(IndexMask(5),
-                                  in1,
-                                  in2,
-                                  out.as_mutable_span(),
-                                  [](const int a, const int b) { return a * b; },
-                                  exec_presets::AllSpanOrSingle());
+  execute_2in_1out<int, int, int>(
+      IndexMask(5),
+      in1,
+      in2,
+      out.as_mutable_span(),
+      [](const int a, const int b) { return a * b; },
+      exec_presets::AllSpanOrSingle());
 
   for (const int value : out) {
     EXPECT_EQ(value, 21);
@@ -373,12 +377,13 @@ TEST_F(VirtualArrayExecTest, ExecuteGVArrayInput)
   const GVArray in = VArray<int>::from_container(Array<int>{1, 2, 3, 4});
   Array<int> out(4);
 
-  execute([](const int a, int &out_value) { new (&out_value) int(a * 10); },
-          exec_presets::Materialized(),
-          IndexMask(4),
-          TypeSequence<ParamTag<ParamCategory::Input, int>, ParamTag<ParamCategory::Output, int>>(),
-          in,
-          out.as_mutable_span());
+  execute(
+      [](const int a, int &out_value) { new (&out_value) int(a * 10); },
+      exec_presets::Materialized(),
+      IndexMask(4),
+      TypeSequence<ParamTag<ParamCategory::Input, int>, ParamTag<ParamCategory::Output, int>>(),
+      in,
+      out.as_mutable_span());
 
   EXPECT_EQ(out[0], 10);
   EXPECT_EQ(out[1], 20);
@@ -413,12 +418,13 @@ TEST_F(VirtualArrayExecTest, ExecuteGVArraySingle)
   const GVArray in = GVArray::from_single(CPPType::get<int>(), 4, &single_value);
   Array<int> out(4);
 
-  execute([](const int a, int &out_value) { new (&out_value) int(a + 1); },
-          exec_presets::Simple(),
-          IndexMask(4),
-          TypeSequence<ParamTag<ParamCategory::Input, int>, ParamTag<ParamCategory::Output, int>>(),
-          in,
-          out.as_mutable_span());
+  execute(
+      [](const int a, int &out_value) { new (&out_value) int(a + 1); },
+      exec_presets::Simple(),
+      IndexMask(4),
+      TypeSequence<ParamTag<ParamCategory::Input, int>, ParamTag<ParamCategory::Output, int>>(),
+      in,
+      out.as_mutable_span());
 
   for (const int value : out) {
     EXPECT_EQ(value, 8);
@@ -507,7 +513,8 @@ TEST_F(VirtualArrayExecTest, ExecuteNonTrivialStringSparseMask)
 
 TEST_F(VirtualArrayExecTest, ExecuteGVArrayNonTrivial)
 {
-  const GVArray in = VArray<std::string>::from_container(Array<std::string>{"one", "two", "three"});
+  const GVArray in = VArray<std::string>::from_container(
+      Array<std::string>{"one", "two", "three"});
   Array<std::string> out(3, NoInitialization{});
 
   execute(
@@ -546,4 +553,3 @@ TEST_F(VirtualArrayExecTest, ExecuteGVArrayNonTrivialFunc)
 }
 
 }  // namespace blender::varray_exec::tests
-

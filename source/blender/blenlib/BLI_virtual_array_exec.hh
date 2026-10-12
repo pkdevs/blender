@@ -108,7 +108,7 @@ struct AllSpanOrSingle {
 /**
  * A slightly weaker variant of #AllSpanOrSingle. It generates less code, because it assumes that
  * some of the inputs are most likely single values. It should be used for small functions which
- * have too many inputs to make #AllSingleOrSpan a reasonable choice.
+ * have too many inputs to make #AllSpanOrSingle a reasonable choice.
  */
 template<size_t... Indices> struct SomeSpanOrSingle {
   static constexpr bool use_devirtualization = true;
@@ -323,12 +323,21 @@ inline void execute_materialized(TypeSequence<ParamTags...> /*param_tags*/,
             /* Use `typedef` instead of `using` to work around a compiler bug. */
             using ParamTag = ParamTags;
             using T = typename ParamTag::base_type;
-            if constexpr (ELEM(
-                              ParamTag::category, ParamCategory::Output, ParamCategory::Mutable)) {
+            if constexpr (ParamTag::category == ParamCategory::Output) {
               T *tmp_buffer = std::get<I>(temporary_buffers).ptr();
               T *param_buffer = std::get<I>(params);
               for (int64_t i = 0; i < chunk_size; i++) {
+                /* Use placement-new since the buffer is assumed to be uninitialized. */
                 new (param_buffer + sliced_mask[i]) T(std::move(tmp_buffer[i]));
+                std::destroy_at(tmp_buffer + i);
+              }
+            }
+            else if constexpr (ParamTag::category == ParamCategory::Mutable) {
+              T *tmp_buffer = std::get<I>(temporary_buffers).ptr();
+              T *param_buffer = std::get<I>(params);
+              for (int64_t i = 0; i < chunk_size; i++) {
+                /* Move back to the buffer since this is assumed to be initialized already. */
+                param_buffer[sliced_mask[i]] = std::move(tmp_buffer[i]);
                 std::destroy_at(tmp_buffer + i);
               }
             }
@@ -436,6 +445,7 @@ inline void execute_element_fn_with_params(ElementFn &&element_fn,
     if constexpr (category == ParamCategory::Input) {
       static_assert(is_VArray_v<Param> || is_VMutableArray_v<Param> ||
                     is_same_any_v<Param, GVArray, GVMutableArray>);
+      assert_value_type<T>(param);
       return param.get_implementation();
     }
     else if constexpr (category == ParamCategory::Output) {

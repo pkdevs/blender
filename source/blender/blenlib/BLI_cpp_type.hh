@@ -443,7 +443,7 @@ class CPPType : NonCopyable, NonMovable {
 };
 
 /**
- * Checks if the value type if a container is the given type. If the container is statically typed,
+ * Checks if the value type of a container is the given type. If the container is statically typed,
  * this is a static-assert. Otherwise it is a runtime-assert.
  */
 template<typename T, typename Container>
