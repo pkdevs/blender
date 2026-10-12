@@ -141,7 +141,7 @@ struct HierarchyPanel: View {
   var body: some View {
     VStack(spacing: 0) {
       header
-      searchField
+      PanelSearchField(text: $store.query, prompt: "Search", identifier: "blender.hierarchy.search")
         .padding(.horizontal, 12)
         .padding(.bottom, 6)
       outline
@@ -224,27 +224,6 @@ struct HierarchyPanel: View {
     }
     .padding(.horizontal, 12)
     .padding(.vertical, 8)
-  }
-
-  /** The system's search field's look, without a navigation view to put one in. */
-  private var searchField: some View {
-    HStack(spacing: 6) {
-      Image(systemName: "magnifyingglass").foregroundStyle(.secondary)
-      TextField("Search", text: $store.query)
-        .textInputAutocapitalization(.never)
-        .autocorrectionDisabled()
-        .submitLabel(.search)
-        .accessibilityIdentifier("blender.hierarchy.search")
-      if !store.query.isEmpty {
-        Button("Clear Search", systemImage: "xmark.circle.fill") { store.query = "" }
-          .labelStyle(.iconOnly)
-          .foregroundStyle(.secondary)
-          .buttonStyle(.plain)
-      }
-    }
-    .padding(.horizontal, 10)
-    .frame(height: 36)
-    .background(Color(uiColor: .tertiarySystemFill), in: Capsule())
   }
 
   private var deleteTitle: String {

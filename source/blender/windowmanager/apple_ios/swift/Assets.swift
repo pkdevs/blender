@@ -130,9 +130,8 @@ struct AssetsPane: View {
       HStack(spacing: 8) {
         typeMenu
         if !store.categories.isEmpty { categoryMenu }
-        AssetSearchField(text: $store.query)
+        PanelSearchField(text: $store.query, prompt: "Search Assets", identifier: "blender.assets.search")
           .frame(maxWidth: .infinity)
-          .frame(height: 28)
         Button(action: store.close) {
           Image(systemName: "xmark")
             .font(.system(size: 20, weight: .medium))
@@ -520,41 +519,3 @@ private struct AssetDropPill: View {
 }
 
 /** \} */
-
-/** The system's search field, as the asset shelf has always used. */
-struct AssetSearchField: UIViewRepresentable {
-  @Binding var text: String
-
-  func makeUIView(context: Context) -> UISearchTextField {
-    let field = UISearchTextField()
-    field.placeholder = "Search Assets"
-    field.accessibilityIdentifier = "blender.assets.search"
-    field.returnKeyType = .search
-    field.autocorrectionType = .no
-    field.delegate = context.coordinator
-    field.setContentHuggingPriority(.defaultLow, for: .horizontal)
-    let coordinator = context.coordinator
-    field.addAction(UIAction { [weak field] _ in
-      coordinator.text.wrappedValue = field?.text ?? ""
-    }, for: .editingChanged)
-    return field
-  }
-
-  func updateUIView(_ field: UISearchTextField, context: Context) {
-    context.coordinator.text = $text
-    if field.text != text { field.text = text }
-  }
-
-  func makeCoordinator() -> Coordinator { Coordinator(text: $text) }
-
-  final class Coordinator: NSObject, UITextFieldDelegate {
-    var text: Binding<String>
-
-    init(text: Binding<String>) { self.text = text }
-
-    func textFieldShouldReturn(_ textField: UITextField) -> Bool {
-      textField.resignFirstResponder()
-      return true
-    }
-  }
-}

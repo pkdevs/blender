@@ -188,3 +188,31 @@ func withMotion(_ animation: Animation = .smooth(duration: 0.28), _ body: () -> 
 }
 
 /** \} */
+
+/** A search field with the system's look, for panels without a navigation view to put the
+ * system's own in. */
+struct PanelSearchField: View {
+  @Binding var text: String
+  let prompt: String
+  let identifier: String
+
+  var body: some View {
+    HStack(spacing: 6) {
+      Image(systemName: "magnifyingglass").foregroundStyle(.secondary)
+      TextField(prompt, text: $text)
+        .textInputAutocapitalization(.never)
+        .autocorrectionDisabled()
+        .submitLabel(.search)
+        .accessibilityIdentifier(identifier)
+      if !text.isEmpty {
+        Button("Clear Search", systemImage: "xmark.circle.fill") { text = "" }
+          .labelStyle(.iconOnly)
+          .foregroundStyle(.secondary)
+          .buttonStyle(.plain)
+      }
+    }
+    .padding(.horizontal, 10)
+    .frame(height: 36)
+    .background(Color(uiColor: .tertiarySystemFill), in: Capsule())
+  }
+}
