@@ -33,15 +33,25 @@ static bool validate_inputs(GeoNodeExecParams &params,
                             const ListPtr<int> &face_offsets_ptr)
 {
   const int verts_num = positions_list.size();
+  if (verts_num == 0) {
+    /* Return empty geometry. */
+    return false;
+  }
   if (!corner_vertices_ptr && !face_offsets_ptr) {
     /* Create mesh with only vertices. */
     return true;
   }
-  if (corner_vertices_ptr && !face_offsets_ptr) {
+  if (corner_vertices_ptr && corner_vertices_ptr->size() == 0 && face_offsets_ptr &&
+      face_offsets_ptr->size() == 0)
+  {
+    /* Create mesh with only vertices. */
+    return true;
+  }
+  if (corner_vertices_ptr && corner_vertices_ptr->size() > 0 && !face_offsets_ptr) {
     params.error_message_add(NodeWarningType::Error, "Number of faces must be greater than zero");
     return false;
   }
-  if (!corner_vertices_ptr && face_offsets_ptr) {
+  if (!corner_vertices_ptr && face_offsets_ptr && face_offsets_ptr->size() > 0) {
     params.error_message_add(NodeWarningType::Error,
                              "Number of corner vertices must be greater than zero");
     return false;
