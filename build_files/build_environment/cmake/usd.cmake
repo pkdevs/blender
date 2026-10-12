@@ -108,6 +108,7 @@ set(USD_EXTRA_ARGS
   -DVulkanLoader_ROOT=${LIBDIR}/vulkan_loader
   -DVulkanUtilityLibraries_ROOT=${LIBDIR}/vulkan_headers
   -DVulkanMemoryAllocator_ROOT=${LIBDIR}/vulkan_memory_allocator
+  -DVulkanUtilityLibraries_DIR=${LIBDIR}/vulkan_utility_libraries/lib/cmake/VulkanUtilityLibraries
   -DShaderC_ROOT=${LIBDIR}/shaderc
   -DSpirvReflect_ROOT=${LIBDIR}/spirv_reflect
   -DPXR_FIND_OPENSUBDIV_IN_CONFIG=ON
