@@ -411,7 +411,7 @@ struct VertOut {
   const ViewMatrices view = views.get(view_id);
   const ObjectMatrices obj = models.get(resource_id);
 
-  const draw::gsplat::SplatShape gs = shape.get_splat(uint(vert_id), obj, view);
+  const draw::gsplat::SplatShape gs = shape.get_splat(uint(vert_id), obj, view, float2(0.0f));
   if (gs.is_culled()) {
     out_position = float4(NAN_FLT);
     return;
@@ -508,7 +508,7 @@ struct FragOut {
   const ViewMatrices view = views.get(view_id);
   const ObjectMatrices obj = models.get(resource_id);
   const ObjectInfos ob_infos = infos.get(resource_id);
-  const draw::gsplat::SplatShape gs = shape.get_splat(uint(vert_id), obj, view);
+  const draw::gsplat::SplatShape gs = shape.get_splat(uint(vert_id), obj, view, float2(0.0f));
 
   if (gs.is_culled()) {
     out_position = float4(NAN_FLT);

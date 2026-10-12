@@ -323,7 +323,7 @@ struct Curves {
   ViewMatrices view = views.get(id.view_id<1>());
   ObjectMatrices obj = models.get(res_id);
 
-  const draw::gsplat::SplatShape gs = shape.get_splat(uint(vert_id), obj, view);
+  const draw::gsplat::SplatShape gs = shape.get_splat(uint(vert_id), obj, view, float2(0.0f));
   if (gs.is_culled()) {
     out_position = float4(NAN_FLT);
     return;

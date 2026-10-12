@@ -58,6 +58,13 @@ namespace eevee {
 
   init_interface(interp, id.raw_id);
 
+  /* Determine a viewport size override for shadow dras. */
+  float2 viewport_size_override = float2(0);
+  if (pipe.is_shadow_pipe) [[static_branch]] {
+    viewport_size_override = float2(
+        shadow_viewport_size_get(shadow.render_view_buf[view_id].viewport_index));
+  }
+
   /* TODO(not_mark): Disabled compute pass for now, due to incompatibility with instancing. */
   /* draw::gsplat::SplatShape gs;
   if (pipe.is_shadow_pipe) [[static_branch]] {
@@ -66,7 +73,7 @@ namespace eevee {
   else {
     gs = shape.get_splat(uint(vert_id), obj, view);
   } */
-  draw::gsplat::SplatShape gs = shape.get_splat(uint(vert_id), obj, view);
+  draw::gsplat::SplatShape gs = shape.get_splat(uint(vert_id), obj, view, viewport_size_override);
   if (gs.is_culled()) {
     out_position = float4(NAN_FLT);
     return;

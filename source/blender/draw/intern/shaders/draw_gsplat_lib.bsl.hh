@@ -46,6 +46,7 @@
 #include "gpu_shader_math_matrix_transform.bsl.hh"
 #include "gpu_shader_math_quaternion.bsl.hh"
 #include "gpu_shader_math_vector.bsl.hh"
+#include "gpu_shader_math_vector_compare.bsl.hh"
 #include "gpu_shader_math_vector_reduce.bsl.hh"
 
 namespace draw::gsplat {
@@ -510,7 +511,8 @@ struct ShapeResource {
                                       float3 wN,
                                       ObjectMatrices object,
                                       ViewMatrices view,
-                                      AxisTuple axes) const
+                                      AxisTuple axes,
+                                      float2 viewport_size_override) const
   {
     float2 shape_offset = detail::get_shape_offset(vert_id);
     if (any(isnan(shape_offset))) {
@@ -525,7 +527,7 @@ struct ShapeResource {
 
     /* Screen-space offset determined by ellipse axis tuple. */
     float2 ss_delta = (shape.shape_offset.x * axes.axis_0 + shape.shape_offset.y * axes.axis_1) *
-                      2.0f / viewport_size;
+                      2.0f / viewport_size_override;
 
     /* Add screen-space offset to homogeneous position. */
     float3 wP = object.point_object_to_world(lP);
@@ -579,12 +581,15 @@ struct ShapeResource {
    *
    * \note Available when a compute prepass has run.
    */
-  SplatShape get_splat(uint vert_id, ObjectMatrices object, ViewMatrices view) const
+  SplatShape get_splat(uint vert_id,
+                       ObjectMatrices object,
+                       ViewMatrices view,
+                       float2 viewport_size_override = float2(0)) const
   {
     /* TODO(not_mark): Load of precompute data is disabled until we can address incompatibility
      * of a compute prepass with instancing and other factors. For now, compute splat data on
      * the fly using `get_splat_fallback`. */
-    return get_splat_fallback(vert_id, object, view);
+    return get_splat_fallback(vert_id, object, view, viewport_size_override);
 
     // const uint gs_id = detail::get_shape_id(vert_id);
 
@@ -609,16 +614,23 @@ struct ShapeResource {
    *
    * \note Available when a compute prepass has not run. More expensive. Used for e.g. shadows.
    */
-  SplatShape get_splat_fallback(uint vert_id, ObjectMatrices object, ViewMatrices view) const
+  SplatShape get_splat_fallback(uint vert_id,
+                                ObjectMatrices object,
+                                ViewMatrices view,
+                                float2 viewport_size_override = float2(0.0f)) const
   {
     const uint gs_id = detail::get_shape_id(vert_id);
     const Gaussian gs = get_gaussian(gs_id);
+
+    if (is_zero(viewport_size_override)) {
+      viewport_size_override = viewport_size;
+    }
 
     /* Project Gaussian to screen-space, recovering 2D axes for a splatted ellipse. */
     float4x4 viewmat = view.viewmat * object.model;
     float3x3 covmat = get_covmat(gs.rotation, gs.scale);
     float3 covmat_proj = project_covmat(
-        gs.mean, viewmat, view.winmat, covmat, viewport_size, view.is_perspective());
+        gs.mean, viewmat, view.winmat, covmat, viewport_size_override, view.is_perspective());
     AxisTuple axes = covmat_to_axes(covmat_proj);
 
     float3 lP = gs.mean;
@@ -632,7 +644,7 @@ struct ShapeResource {
       wN = -wN;
     }
 
-    return get_splat_implementation(vert_id, lP, wN, object, view, axes);
+    return get_splat_implementation(vert_id, lP, wN, object, view, axes, viewport_size_override);
   }
 };
 
