@@ -711,6 +711,11 @@ void project_property(bContext *C, Button &but, int index, DictionaryValue &fiel
     const double step = type == PROP_INT ? 0.5 :
         0.01 * static_cast<ButtonNumber &>(but).step_size;
     field.append_double("dragStep", std::isfinite(step) && step > 0 ? step : 0.01);
+    /* Dragging speeds up over a wide range, as Blender's own number buttons do. */
+    const double soft_range = double(but.softmax) - double(but.softmin);
+    if (std::isfinite(soft_range) && soft_range > 0) {
+      field.append_double("softRange", soft_range);
+    }
   }
   switch (type) {
     case PROP_BOOLEAN:

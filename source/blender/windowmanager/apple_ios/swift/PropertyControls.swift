@@ -217,10 +217,19 @@ struct NumberField: View, Equatable {
 
   private func changeScrub(_ translation: CGPoint) {
     guard let current = scrubValue, translation.x.isFinite, translation.y.isFinite else { return }
-    var step = property.double("dragStep") ?? (property.string("type") == "INT" ? 0.5 : 0.01)
+    let integer = property.string("type") == "INT"
+    var step = property.double("dragStep") ?? (integer ? 0.5 : 0.01)
     if property.bool("angle") { step *= 10 * .pi / 180 }
+    let motion = (translation.x - lastTranslation) * scrubSensitivity(translation.y)
     /* Integrate the horizontal motion, so changing precision never reinterprets earlier motion. */
-    let next = current + (translation.x - lastTranslation) * step * scrubSensitivity(translation.y)
+    var next = current + motion * step
+    /* A size or resolution over a wide range, such as Dyntopo's detail, changes by a ratio: the
+     * same drag scales it alike, small or large. */
+    if !integer, let range = property.double("softRange"), range > 11,
+       let low = property.double("min"), low > 0, current > 0
+    {
+      next = current * exp(motion * 0.01)
+    }
     lastTranslation = translation.x
     scrubValue = clamp(next)
     if CACurrentMediaTime() - lastPreview >= 1.0 / 60.0, let value = scrubValue {
