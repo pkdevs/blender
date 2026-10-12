@@ -5,7 +5,7 @@
 /** \file
  * The document window's toolbar: back to the documents, the sidebar menu,
  * the editing mode, adding to the scene and the mesh selection mode; the active tool's settings in
- * the middle; then viewport shading, Undo with Share and More, and Properties. A phone keeps the
+ * the middle; then viewport shading, Properties, and Undo with Share and More. A phone keeps the
  * most used items and puts the rest in one menu.
  */
 
@@ -247,6 +247,14 @@ struct DocumentToolbar: ToolbarContent {
 #if !os(visionOS)
     ToolbarSpacer(.fixed, placement: .topBarTrailing)
 #endif
+    /* Properties slides in from the window's trailing edge. */
+    ToolbarItem(placement: .topBarTrailing) {
+      panelToggle("Properties", image: BlenderIcon.image("PROPERTIES"), isOn: model.inspectorShown,
+                  identifier: "blender.inspector") { shell.panels.toggleInspector() }
+    }
+#if !os(visionOS)
+    ToolbarSpacer(.fixed, placement: .topBarTrailing)
+#endif
     /* Undo, Share and More together. */
     ToolbarItemGroup(placement: .topBarTrailing) {
       undoButton
@@ -257,14 +265,6 @@ struct DocumentToolbar: ToolbarContent {
         .accessibilityIdentifier("blender.share")
       Menu("More", systemImage: "ellipsis") { moreMenu }
         .accessibilityIdentifier("blender.actions")
-    }
-#if !os(visionOS)
-    ToolbarSpacer(.fixed, placement: .topBarTrailing)
-#endif
-    /* Properties slides in from the window's trailing edge. */
-    ToolbarItem(placement: .topBarTrailing) {
-      panelToggle("Properties", image: BlenderIcon.image("PROPERTIES"), isOn: model.inspectorShown,
-                  identifier: "blender.inspector") { shell.panels.toggleInspector() }
     }
   }
 
