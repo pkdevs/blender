@@ -193,11 +193,13 @@ template<typename ParamTag> struct MaterializeArgInfo {
   const typename ParamTag::base_type *internal_span_data;
 };
 
+// TOD: Improve naming to show that this is related to AoS/SoA conversion.
 template<typename T> struct TypeSplitInfo {
   static constexpr bool supports_split = false;
   template<int64_t MaxChunkSize> using Split = int;
 };
 
+// TODO: Ideally shouldn't have anything special to vector/color types here, extract that.
 template<typename T, int VecSize> struct TypeSplitInfo<VecBase<T, VecSize>> {
   static constexpr bool supports_split = true;
   template<int64_t MaxChunkSize> using Split = std::array<std::array<T, MaxChunkSize>, VecSize>;
