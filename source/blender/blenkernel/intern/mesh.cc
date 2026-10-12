@@ -1429,10 +1429,10 @@ Mesh *mesh_new_no_attributes(const int verts_num,
   return mesh;
 }
 
-Mesh *mesh_new_no_attributes_and_face_offsets(const int verts_num,
-                                              const int edges_num,
-                                              const int faces_num,
-                                              const int corners_num)
+Mesh *mesh_new_no_data(const int verts_num,
+                       const int edges_num,
+                       const int faces_num,
+                       const int corners_num)
 {
   Mesh *mesh = static_cast<Mesh *>(BKE_libblock_alloc(
       nullptr, ID_ME, BKE_idtype_idcode_to_name(ID_ME), LIB_ID_CREATE_LOCALIZE));
@@ -1442,7 +1442,7 @@ Mesh *mesh_new_no_attributes_and_face_offsets(const int verts_num,
   mesh->edges_num = edges_num;
   mesh->faces_num = faces_num;
   mesh->corners_num = corners_num;
-  
+
   return mesh;
 }
 
