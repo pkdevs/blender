@@ -249,21 +249,19 @@ static void node_geo_exec(GeoNodeExecParams params)
     params.set_default_remaining_outputs();
     return;
   }
-  if (params.output_is_required("Mesh"_ustr)) {
-    const GListPtr corner_vertices_list = params.extract_input<GListPtr>("Corner Vertices"_ustr);
-    const GListPtr face_offsets_list = params.extract_input<GListPtr>("Face Offsets"_ustr);
-    const List<float3> &positions = positions_list->typed<float3>();
-    const ListPtr<int> &corner_vertices = corner_vertices_list.typed<int>();
-    const ListPtr<int> &face_offsets = face_offsets_list.typed<int>();
-    if (!validate_inputs(params, positions, corner_vertices, face_offsets)) {
-      params.set_default_remaining_outputs();
-      return;
-    }
-    Mesh *mesh = create_mesh_from_lists(positions_list->typed<float3>(),
-                                        corner_vertices_list.typed<int>(),
-                                        face_offsets_list.typed<int>());
-    params.set_output("Mesh"_ustr, GeometrySet::from_mesh(mesh));
+  const GListPtr corner_vertices_list = params.extract_input<GListPtr>("Corner Vertices"_ustr);
+  const GListPtr face_offsets_list = params.extract_input<GListPtr>("Face Offsets"_ustr);
+  const List<float3> &positions = positions_list->typed<float3>();
+  const ListPtr<int> &corner_vertices = corner_vertices_list.typed<int>();
+  const ListPtr<int> &face_offsets = face_offsets_list.typed<int>();
+  if (!validate_inputs(params, positions, corner_vertices, face_offsets)) {
+    params.set_default_remaining_outputs();
+    return;
   }
+  Mesh *mesh = create_mesh_from_lists(positions_list->typed<float3>(),
+                                      corner_vertices_list.typed<int>(),
+                                      face_offsets_list.typed<int>());
+  params.set_output("Mesh"_ustr, GeometrySet::from_mesh(mesh));
 }
 
 static void node_register()
