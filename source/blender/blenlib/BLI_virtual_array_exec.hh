@@ -23,8 +23,10 @@
  * utilities for specific parameter counts.
  */
 
+#include "BLI_color_types.hh"
 #include "BLI_devirtualize_parameters.hh"
 #include "BLI_generic_virtual_array.hh"
+#include "BLI_math_vector_types.hh"
 #include "BLI_parameter_pack_utils.hh"
 
 namespace blender::varray_exec {
@@ -172,17 +174,141 @@ template<typename ParamTag> struct MaterializeArgInfo {
   const typename ParamTag::base_type *internal_span_data;
 };
 
-template<int64_t MaxChunkSize, typename ElementFn, typename... Args>
+template<typename T> struct TypeSplitInfo {
+  static constexpr bool supports_split = false;
+  template<int64_t MaxChunkSize> using Split = int;
+};
+
+template<> struct TypeSplitInfo<float3> {
+  static constexpr bool supports_split = true;
+  template<int64_t MaxChunkSize> using Split = std::array<std::array<float, MaxChunkSize>, 3>;
+
+  template<int64_t MaxChunkSize>
+  static float3 fetch(const Split<MaxChunkSize> &split, const int64_t i)
+  {
+    return float3(split[0][i], split[1][i], split[2][i]);
+  }
+
+  template<int64_t MaxChunkSize>
+  static void store(Split<MaxChunkSize> &split, const int64_t i, const float3 &v)
+  {
+    split[0][i] = v[0];
+    split[1][i] = v[1];
+    split[2][i] = v[2];
+  }
+
+  template<int64_t MaxChunkSize>
+  static void split(const int64_t size, const float3 *values, Split<MaxChunkSize> &split)
+  {
+    for (int64_t i = 0; i < size; i++) {
+      store<MaxChunkSize>(split, i, values[i]);
+    }
+  }
+
+  template<int64_t MaxChunkSize>
+  static void merge(const int64_t size, const Split<MaxChunkSize> &split, float3 *r_values)
+  {
+    for (int64_t i = 0; i < size; i++) {
+      r_values[i] = fetch<MaxChunkSize>(split, i);
+    }
+  }
+};
+
+template<int64_t MaxChunkSize,
+         typename ElementFn,
+         size_t... I,
+         typename... ParamTags,
+         typename... Args>
 #if (defined(__GNUC__) && !defined(__clang__))
 [[gnu::optimize("-funroll-loops")]] [[gnu::optimize("O3")]]
 #endif
 inline void execute_chunked_hot_loop(const ElementFn &element_fn,
+                                     TypeSequence<ParamTags...> /*param_tags*/,
+                                     std::index_sequence<I...> /*indices*/,
                                      const int64_t size,
                                      Args *__restrict... args)
 {
+  std::tuple<
+      typename TypeSplitInfo<typename ParamTags::base_type>::template Split<MaxChunkSize>...>
+      split_buffer;
+
+  /* Split incoming buffers. */
+  (
+      [&]() {
+        using ParamTag = ParamTags;
+        using T = typename ParamTag::base_type;
+        using SplitInfo = TypeSplitInfo<T>;
+        if constexpr (SplitInfo::supports_split &&
+                      ELEM(ParamTag::category, ParamCategory::Input, ParamCategory::Mutable))
+        {
+          SplitInfo::template split<MaxChunkSize>(size, args, std::get<I>(split_buffer));
+        }
+      }(),
+      ...);
+
   for (int64_t i = 0; i < size; i++) {
-    element_fn(args[i]...);
+    std::tuple<TypedBuffer<typename ParamTags::base_type>...> written_values;
+
+    (
+        [&]() {
+          using ParamTag = ParamTags;
+          using T = typename ParamTag::base_type;
+          using SplitInfo = TypeSplitInfo<T>;
+          if constexpr (ELEM(ParamTag::category, ParamCategory::Mutable) &&
+                        SplitInfo::supports_split)
+          {
+            new (std::get<I>(written_values).ptr())
+                T(SplitInfo::template fetch<MaxChunkSize>(std::get<I>(split_buffer), i));
+          }
+        }(),
+        ...);
+
+    element_fn([&]() -> decltype(auto) {
+      using ParamTag = ParamTags;
+      using T = typename ParamTag::base_type;
+      using SplitInfo = TypeSplitInfo<T>;
+      if constexpr (SplitInfo::supports_split && ParamTag::category == ParamCategory::Input) {
+        return SplitInfo::template fetch<MaxChunkSize>(std::get<I>(split_buffer), i);
+      }
+      else if constexpr (SplitInfo::supports_split &&
+                         ELEM(ParamTag::category, ParamCategory::Mutable, ParamCategory::Output))
+      {
+        return std::get<I>(written_values).ref();
+      }
+      else {
+        Args *arg = args;
+        return arg[i];
+      }
+    }()...);
+    /* Write output to split. */
+    (
+        [&]() {
+          using ParamTag = ParamTags;
+          using T = typename ParamTag::base_type;
+          using SplitInfo = TypeSplitInfo<T>;
+          if constexpr (ELEM(ParamTag::category, ParamCategory::Mutable, ParamCategory::Output) &&
+                        SplitInfo::supports_split)
+          {
+            SplitInfo::template store<MaxChunkSize>(
+                std::get<I>(split_buffer), i, std::get<I>(written_values).ref());
+          }
+        }(),
+        ...);
   }
+
+  /* Write split to args. */
+  (
+      [&]() {
+        using ParamTag = ParamTags;
+        using T = typename ParamTag::base_type;
+        using SplitInfo = TypeSplitInfo<T>;
+        if constexpr (ELEM(ParamTag::category, ParamCategory::Mutable, ParamCategory::Output) &&
+                      SplitInfo::supports_split)
+        {
+          SplitInfo::template merge<MaxChunkSize>(size, std::get<I>(split_buffer), args);
+        }
+      }(),
+      ...);
 }
 
 template<int64_t MaxChunkSize,
@@ -501,7 +627,11 @@ inline void execute_element_fn_with_params(ElementFn &&element_fn,
             TypeSequence<ParamTags...>(),
             std::index_sequence<I...>(),
             [&]<typename... Args>(const int64_t size, Args *__restrict... args) {
-              execute_chunked_hot_loop<MAX_CHUNK_SIZE>(element_fn, size, args...);
+              execute_chunked_hot_loop<MAX_CHUNK_SIZE>(element_fn,
+                                                       TypeSequence<ParamTags...>(),
+                                                       std::index_sequence_for<ParamTags...>(),
+                                                       size,
+                                                       args...);
             },
             segment,
             loaded_params);
