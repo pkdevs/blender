@@ -148,12 +148,7 @@ ATTR_ALWAYS_INLINE_EMIT uint32_t hash(uint32_t kx, uint32_t ky, uint32_t kz, uin
 
 BLI_INLINE uint32_t float_as_uint(float f)
 {
-  union {
-    uint32_t i;
-    float f;
-  } u;
-  u.f = f;
-  return u.i;
+  return std::bit_cast<uint32_t>(f);
 }
 
 /* PCG 2D, 3D and 4D hash functions,
@@ -287,6 +282,14 @@ void hash_float_to_float(const IndexMask &mask,
       mask, ks, r_values, [](const float3 &k) { return hash_float_to_float(k); });
 }
 
+// void hash_float_to_float(const IndexMask &mask,
+//                          const VArray<float4> &ks,
+//                          MutableSpan<float> r_values)
+// {
+//   varray_exec::execute_1in_1out_uninitialized(
+//       mask, ks, r_values, [](const float4 &k) { return hash_float_to_float(k); });
+// }
+
 void hash_float_to_color(const IndexMask &mask,
                          const VArray<float3> &ks,
                          MutableSpan<ColorGeometry4f> r_values)
@@ -295,6 +298,27 @@ void hash_float_to_color(const IndexMask &mask,
     const float3 c = hash_float_to_float3(k);
     return ColorGeometry4f(c[0], c[1], c[2], 1.0f);
   });
+  // constexpr int64_t CAPACITY = 10 * 1024;
+  // const int64_t mask_size = mask.size();
+  // Vector<float3, CAPACITY> data_3d(mask_size);
+  // Vector<float4, CAPACITY * 2> data_4d(mask_size * 2);
+  // mask.foreach_index_optimized<int64_t>([&](const int64_t i, const int64_t pos) {
+  //   const float3 k = ks[i];
+  //   data_3d[pos] = k;
+  //   data_4d[pos * 2 + 0] = float4(k, 1);
+  //   data_4d[pos * 2 + 1] = float4(k, 2);
+  // });
+  // Vector<float, CAPACITY> noise_values_3d(mask_size);
+  // Vector<float, CAPACITY * 2> noise_values_4d(mask_size * 2);
+  // hash_float_to_float(IndexMask(mask_size), VArray<float3>::from_span(data_3d),
+  // noise_values_3d); hash_float_to_float(IndexMask(mask_size),
+  // VArray<float4>::from_span(data_4d), noise_values_4d);
+  // mask.foreach_index_optimized<int64_t>([&](const int64_t i, const int64_t pos) {
+  //   r_values[i][0] = noise_values_3d[pos];
+  //   r_values[i][1] = noise_values_4d[pos * 2 + 0];
+  //   r_values[i][2] = noise_values_4d[pos * 2 + 1];
+  //   r_values[i][3] = 1.0f;
+  // });
 }
 
 float2 hash_float_to_float2(float2 k)

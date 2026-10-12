@@ -54,6 +54,9 @@ float hash_float_to_float(float4 k);
 void hash_float_to_float(const IndexMask &mask,
                          const VArray<float3> &ks,
                          MutableSpan<float> r_values);
+// void hash_float_to_float(const IndexMask &mask,
+//                          const VArray<float4> &ks,
+//                          MutableSpan<float> r_values);
 void hash_float_to_color(const IndexMask &mask,
                          const VArray<float3> &ks,
                          MutableSpan<ColorGeometry4f> r_values);
