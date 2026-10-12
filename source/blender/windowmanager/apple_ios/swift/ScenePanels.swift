@@ -13,16 +13,6 @@ import UIKit
 
 @MainActor
 final class SwiftScenePanels {
-  var menuProvider: ((NSDictionary) -> UIMenu?)? {
-    didSet {
-      inspector.menuProvider = menuProvider
-      hierarchy.menuProvider = menuProvider
-      shading.menuProvider = menuProvider
-      toolStrip.menuProvider = menuProvider
-      toolPopover.menuProvider = menuProvider
-    }
-  }
-
   let inspector = InspectorStore(mode: .properties)
   private let shading = InspectorStore(mode: .shading, tab: "SHADING")
   private let toolStrip = InspectorStore(mode: .toolStrip, tab: "TOOL")

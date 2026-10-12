@@ -20,7 +20,6 @@ final class ShellPanels {
 
   init(model: ShellModel) {
     self.model = model
-    panels.menuProvider = { wm_apple_ios_property_menu($0 as! [AnyHashable: Any]) }
     panels.panelsDidChange = { [weak self] in
       guard let self else { return }
       withAnimation(SwiftTimeline.animation) {

@@ -127,30 +127,6 @@ extern "C" UIImage *wm_apple_ios_brush_image(NSString *preview, CGFloat diameter
   return blenderIOSBrushImage(preview, diameter);
 }
 
-extern "C" UIMenu *wm_apple_ios_property_menu(NSDictionary *property)
-{
-  /* A property's menu, such as a modifier's or a material slot's: Blender's own, resolved when it
-   * opens. */
-  NSMutableDictionary *route = [NSMutableDictionary dictionaryWithDictionary:@{
-    @"root" : property[@"menu"] ?: @"",
-    @"path" : @[]
-  }];
-  if (property[@"tab"]) {
-    route[@"propertiesTab"] = property[@"tab"];
-  }
-  return blenderIOSNativeSubmenu(@{
-    @"title" : property[@"label"] ?: @"",
-    @"icon" : property[@"icon"] ?: @"",
-    @"route" : route
-  },
-                                 property[@"menu"]);
-}
-
-extern "C" UIMenu *wm_apple_ios_blender_menu(NSDictionary *item, NSString *identifier)
-{
-  return blenderIOSNativeSubmenu(item, identifier);
-}
-
 extern "C" UIDocument *wm_apple_ios_open_document()
 {
   return wm_apple_ios_launcher_document();

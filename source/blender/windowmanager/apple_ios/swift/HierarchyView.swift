@@ -20,7 +20,6 @@ final class HierarchyStore: ObservableObject {
   @Published private(set) var status = ""
 
   let send: (JSON) -> Void
-  var menuProvider: ((NSDictionary) -> UIMenu?)?
 
   init(send: @escaping (JSON) -> Void) {
     self.send = send
@@ -136,48 +135,31 @@ struct HierarchyPanel: View {
   @State private var collectionName = "Collection"
   @Environment(\.panelInWindow) private var inWindow
 
-  /** A navigation view of its own, as in Files and Mail: its title, search, and the toolbar with
-   * Select and Add, and in Select mode the actions on the selection along the bottom. */
+  /** Its title with Select and Add, a search field, the outline, and in Select mode the actions on
+   * the selection along the bottom, as Files and Mail have them. Plain SwiftUI, so the panel sits
+   * the same in the window's sidebar, a sheet or a window of its own. */
   var body: some View {
-    NavigationStack {
+    VStack(spacing: 0) {
+      header
+      searchField
+        .padding(.horizontal, 12)
+        .padding(.bottom, 6)
       outline
-        .safeAreaInset(edge: .bottom) {
-          if !store.status.isEmpty {
-            Text(store.status)
-              .font(.footnote)
-              .foregroundStyle(.red)
-              .padding(12)
-          }
-        }
-        .navigationTitle("Outliner")
-        .navigationBarTitleDisplayMode(.inline)
-        .searchable(text: $store.query, placement: .navigationBarDrawer(displayMode: .always))
-        .toolbar {
-          ToolbarItem(placement: .topBarLeading) {
-            Button(store.editing ? "Done" : "Select") {
-              withMotion { store.editing.toggle() }
-            }
-            .fontWeight(store.editing ? .semibold : .regular)
-            .accessibilityIdentifier("blender.hierarchy.select")
-          }
-          ToolbarItem(placement: .topBarTrailing) {
-            /* Blender's Add menu, built when it opens. */
-            UIMenuButton(title: nil, image: UIImage(systemName: "plus"),
-                         accessibilityLabel: "Add Collection or Object", tint: PanelStyle.uiTint) { addMenu }
-              .frame(width: 44, height: 44)
-              .accessibilityIdentifier("blender.hierarchy.add")
-          }
-          if !inWindow {
-            ToolbarItem(placement: .topBarTrailing) {
-              Button("Close Outliner", systemImage: "xmark", action: close)
-                .keyboardShortcut(.cancelAction)
-            }
-          }
-          if store.editing {
-            ToolbarItemGroup(placement: .bottomBar) { selectionActions }
-          }
-        }
-        .toolbarBackgroundVisibility(.hidden, for: .navigationBar, .bottomBar)
+      if !store.status.isEmpty {
+        Text(store.status)
+          .font(.footnote)
+          .foregroundStyle(.red)
+          .padding(12)
+      }
+      if store.editing {
+        HStack { selectionActions }
+          .labelStyle(.iconOnly)
+          .font(.title3)
+          .padding(.horizontal, 24)
+          .frame(height: 50)
+          .transition(.move(edge: .bottom).combined(with: .opacity))
+          .accessibilityIdentifier("blender.hierarchy.selectionBar")
+      }
     }
     .renamePrompt($rename)
     .alert(deleteTitle, isPresented: Binding(get: { !deleting.isEmpty }, set: { if !$0 { deleting = [] } })) {
@@ -200,19 +182,69 @@ struct HierarchyPanel: View {
     }
   }
 
-  private var addMenu: UIMenu {
-    let collection = UIAction(title: "New Collection", image: BlenderIcon.image("OUTLINER_COLLECTION"),
-                              identifier: UIAction.Identifier("blender.hierarchy.newCollection")) { _ in
-      collectionName = "Collection"
-      naming = true
+  private var header: some View {
+    HStack(spacing: 8) {
+      Button(store.editing ? "Done" : "Select") {
+        withMotion { store.editing.toggle() }
+      }
+      .fontWeight(store.editing ? .semibold : .regular)
+      .buttonStyle(.bordered)
+      .buttonBorderShape(.capsule)
+      .accessibilityIdentifier("blender.hierarchy.select")
+      Text("Outliner")
+        .font(.headline)
+        .frame(maxWidth: .infinity)
+      Menu {
+        Button("New Collection", systemImage: "folder.badge.plus") {
+          collectionName = "Collection"
+          naming = true
+        }
+        /* Blender's Add menu. */
+        Menu {
+          BlenderMenuItems(route: BlenderMenus.route("VIEW3D_MT_add"))
+        } label: {
+          Label { Text("Add Object") } icon: { BlenderIcon.image("OBJECT_DATA").map { Image(uiImage: $0) } }
+        }
+      } label: {
+        Label("Add Collection or Object", systemImage: "plus")
+          .labelStyle(.iconOnly)
+          .frame(width: 32, height: 32)
+      }
+      .buttonStyle(.bordered)
+      .buttonBorderShape(.circle)
+      .prefetchingBlenderMenu(BlenderMenus.route("VIEW3D_MT_add"))
+      .accessibilityIdentifier("blender.hierarchy.add")
+      if !inWindow {
+        Button("Close Outliner", systemImage: "xmark", action: close)
+          .labelStyle(.iconOnly)
+          .buttonStyle(.bordered)
+          .buttonBorderShape(.circle)
+          .keyboardShortcut(.cancelAction)
+      }
     }
-    var children: [UIMenuElement] = [collection]
-    if let objects = store.menuProvider?(["label": "Add Object", "menu": "VIEW3D_MT_add",
-                                          "icon": "OBJECT_DATA"] as NSDictionary)
-    {
-      children.append(objects)
+    .padding(.horizontal, 12)
+    .padding(.vertical, 8)
+  }
+
+  /** The system's search field's look, without a navigation view to put one in. */
+  private var searchField: some View {
+    HStack(spacing: 6) {
+      Image(systemName: "magnifyingglass").foregroundStyle(.secondary)
+      TextField("Search", text: $store.query)
+        .textInputAutocapitalization(.never)
+        .autocorrectionDisabled()
+        .submitLabel(.search)
+        .accessibilityIdentifier("blender.hierarchy.search")
+      if !store.query.isEmpty {
+        Button("Clear Search", systemImage: "xmark.circle.fill") { store.query = "" }
+          .labelStyle(.iconOnly)
+          .foregroundStyle(.secondary)
+          .buttonStyle(.plain)
+      }
     }
-    return UIMenu(children: children)
+    .padding(.horizontal, 10)
+    .frame(height: 36)
+    .background(Color(uiColor: .tertiarySystemFill), in: Capsule())
   }
 
   private var deleteTitle: String {

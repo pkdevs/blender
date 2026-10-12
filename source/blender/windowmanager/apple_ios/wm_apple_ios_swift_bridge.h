@@ -65,11 +65,6 @@ char *_Nullable WM_apple_ios_ui_timeline_take_json(void);
 char *_Nullable WM_apple_ios_ui_assets_take_json(void);
 /** How much of the window's height, from the bottom, the asset pane and timeline cover. */
 void WM_apple_ios_ui_bottom_tray_set(float fraction);
-/** A property's own menu, such as a modifier's: Blender's, resolved when it opens. */
-UIMenu *_Nullable wm_apple_ios_property_menu(NSDictionary *_Nonnull property);
-/** One of Blender's menus by its route, resolved when it opens. */
-UIMenu *_Nonnull wm_apple_ios_blender_menu(NSDictionary *_Nonnull item,
-                                           NSString *_Nullable identifier);
 UIDocument *_Nullable wm_apple_ios_open_document(void);
 /** Choose a template and create a new document, presented from `presenter`. */
 void wm_apple_ios_new_document(UIViewController *_Nonnull presenter);
@@ -96,6 +91,10 @@ bool wm_apple_ios_shader_compilation(int *_Nonnull finished,
 void wm_apple_ios_build_menu_bar(id<UIMenuBuilder> _Nonnull builder, NSArray *_Nonnull items);
 uint64_t wm_apple_ios_menu_bar_request(void);
 NSArray *_Nullable wm_apple_ios_menu_result(uint64_t request);
+/** Ask for one of Blender's menus by its JSON route, or run its item when `execute`; the answer
+ * is taken with #WM_apple_ios_ui_menu_take_result. */
+uint64_t WM_apple_ios_ui_menu_request(const char *_Nonnull route, bool execute);
+char *_Nullable WM_apple_ios_ui_menu_take_result(uint64_t identifier);
 /** The document window's controller is closing. */
 void wm_apple_ios_document_controller_closed(id _Nonnull controller);
 

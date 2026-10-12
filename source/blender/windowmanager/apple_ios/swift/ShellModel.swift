@@ -24,6 +24,11 @@ final class ShellModel {
   private(set) var tools: [JSON?] = []
   private(set) var activeTool = ""
   private(set) var actions: [JSON] = []
+  /** What Blender's menus depend on: the mode, and the selection, for which the quick actions
+   * stand in. */
+  var menuContext: String {
+    "\(mode)|\(objectMode)|" + actions.compactMap { $0.string("title") }.joined(separator: ",")
+  }
   private(set) var brushes: JSON?
   private(set) var canUndo = false
   /** Adjust Last Operation: the last operator's settings, or none. */

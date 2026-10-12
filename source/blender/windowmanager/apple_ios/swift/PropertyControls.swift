@@ -450,12 +450,8 @@ struct PropertyRow: View, Equatable {
           case "OPERATOR":
             OperatorButton(store: store, property: property)
           case "MENU":
-            UIMenuButton(title: label, image: BlenderIcon.image(property.string("icon")),
-                         enabled: property.bool("editable"), tint: PanelStyle.uiTint,
-                         menuTitle: label) {
-              store.menuProvider?(property as NSDictionary)
-            }
-            .frame(minHeight: 44)
+            BlenderMenuButton(property: property)
+              .frame(maxWidth: .infinity, minHeight: 44)
           case "LABEL":
             Text(label)
               .font(.subheadline)

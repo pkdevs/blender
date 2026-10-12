@@ -302,6 +302,12 @@ public struct DocumentWindow: View {
    * Properties the inspector on the other side. A phone shows both as sheets. On Apple Vision Pro
    * they are windows of their own. */
   public var body: some View {
+    window
+      .environment(\.blenderMenuContext, model.menuContext)
+  }
+
+  @ViewBuilder
+  private var window: some View {
 #if os(visionOS)
     editor
 #else
@@ -328,6 +334,20 @@ public struct DocumentWindow: View {
   /** The Outliner and Properties slide in from the window's sides and push the viewport over, in
    * one animation with it. Only one fits beside the viewport in a narrow window. */
   private var columns: some View {
+    /* The toolbar spans the window and stays put as the columns slide in
+     * below it. */
+    NavigationStack {
+      columnLayout
+        .toolbar {
+          DocumentToolbar(model: model, shell: shell, commands: commands, stripWidth: $stripWidth)
+        }
+        .toolbar(controlsShown ? .visible : .hidden, for: .navigationBar)
+        .toolbarTitleDisplayMode(.inline)
+    }
+    .onChange(of: sizeClass, initial: true) { _, size in model.compact = size == .compact }
+  }
+
+  private var columnLayout: some View {
     HStack(spacing: 0) {
       if model.hierarchyShown && controlsShown {
         HierarchyPanel(store: shell.panels.hierarchy) { shell.panels.setHierarchyShown(false) }
@@ -337,14 +357,11 @@ public struct DocumentWindow: View {
           .transition(.move(edge: .leading))
           .accessibilityIdentifier("blender.hierarchy.panel")
       }
-      editor
+      layers
       if model.inspectorShown && controlsShown {
-        NavigationStack {
-          InspectorPanel(store: shell.panels.inspector) { shell.panels.setInspectorShown(false) }
-            .environment(\.panelInWindow, true)
-            .toolbar(.hidden, for: .navigationBar)
-        }
-        .frame(width: 336)
+        InspectorPanel(store: shell.panels.inspector) { shell.panels.setInspectorShown(false) }
+          .environment(\.panelInWindow, true)
+          .frame(width: 336)
         .background(Color(uiColor: .secondarySystemBackground).ignoresSafeArea())
         .transition(.move(edge: .trailing))
         .accessibilityIdentifier("blender.inspector.panel")

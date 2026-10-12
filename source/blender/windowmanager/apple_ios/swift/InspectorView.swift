@@ -409,11 +409,7 @@ struct StripColumn: View, Equatable {
       case "OPERATOR":
         OperatorButton(store: store, property: property, compact: true)
       case "MENU":
-        UIMenuButton(title: property.string("label"), image: BlenderIcon.image(property.string("icon")),
-                     style: .borderless, enabled: property.bool("editable"),
-                     menuTitle: property.string("label") ?? "") {
-          store.menuProvider?(property as NSDictionary)
-        }
+        BlenderMenuButton(property: property)
       case "ENUM":
         EnumControl(store: store, property: property, compact: true)
           .frame(width: width - 8)

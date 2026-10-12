@@ -282,10 +282,12 @@ struct QuickActionsRow: View {
       HStack(spacing: 8) {
         toggle
         ScrollView(.horizontal, showsIndicators: false) {
-          HStack(spacing: 4) {
-            ForEach(actions) { action in
-              QuickActionButton(action: action, model: model)
-                .panelGlassID("action.\(action.id)", in: glass)
+          /* Glass of their own inside the scroll view, which clips it as they scroll. */
+          PanelGlassGroup(spacing: 2) {
+            HStack(spacing: 4) {
+              ForEach(actions) { action in
+                QuickActionButton(action: action, model: model)
+              }
             }
           }
           .padding(6)
@@ -297,10 +299,7 @@ struct QuickActionsRow: View {
         .frame(width: min(actionsWidth, max(0, laneWidth - 44 - 16 - (contextMenuAvailable ? 52 : 0) -
                                               (redoPillTitle != nil ? 144 : 0))))
         if contextMenuAvailable {
-          UIMenuButton(title: nil, image: UIImage(systemName: "ellipsis"), style: .plain,
-                       accessibilityLabel: "Actions", tint: .label, deferred: false) {
-            wm_apple_ios_context_menu()
-          }
+          ContextMenuButton()
           .frame(width: ShellMetrics.buttonHeight, height: ShellMetrics.buttonHeight)
           .panelGlass(interactive: true, in: Circle())
           .panelGlassID("context", in: glass)

@@ -28,141 +28,6 @@ final class ShellCommands {
     self.shell = shell
   }
 
-  private func section(_ children: [UIMenuElement]) -> UIMenu {
-    UIMenu(title: "", options: .displayInline, children: children)
-  }
-
-  /** Share: what leaves the document. Documents save themselves, so
-   * there is no Save; going back to the documents keeps the work. */
-  func shareMenu() -> UIMenu {
-    let share = UIAction(title: "Share…", image: UIImage(systemName: "square.and.arrow.up")) { [weak self] _ in
-      self?.shareDocument()
-    }
-    let saveAs = UIAction(title: "Save As…", image: UIImage(systemName: "doc.on.doc")) { [weak self] _ in
-      self?.saveDocumentAs()
-    }
-    /* Blender's own Import and Export menus, so every format it and its add-ons support is
-     * listed. Their file browsers open the system's document picker. */
-    let importMenu = wm_apple_ios_blender_menu(
-      ["title": "Import", "icon": "IMPORT", "route": ["root": "TOPBAR_MT_file_import", "path": []]],
-      "blender.file.import")
-    let exportMenu = wm_apple_ios_blender_menu(
-      ["title": "Export", "icon": "EXPORT", "route": ["root": "TOPBAR_MT_file_export", "path": []]],
-      "blender.file.export")
-    let renderImage = UIAction(title: "Render Image", image: UIImage(systemName: "photo")) { [weak self] _ in
-      self?.render?.renderAnimation(false)
-    }
-    let renderAnimation = UIAction(title: "Render Animation", image: UIImage(systemName: "film")) { [weak self] _ in
-      self?.render?.renderAnimation(true)
-    }
-    /* Every earlier render, in the render sheet's film strip. */
-    let renders = UIAction(title: "Renders", image: UIImage(systemName: "photo.stack")) { [weak self] _ in
-      self?.render?.showRenders()
-    }
-    let saveTemplate = UIAction(title: "Save as Template…", image: UIImage(systemName: "square.on.square")) {
-      [weak self] _ in self?.saveAsTemplate()
-    }
-    return UIMenu(children: [section([share, saveAs]), section([importMenu, exportMenu]),
-                             section([renderImage, renderAnimation, renders]), section([saveTemplate])])
-  }
-
-  /** More: smaller things, with viewport options that show their current state when opened. */
-  func moreMenu() -> UIMenu {
-    let create = UIAction(title: "New…", image: UIImage(systemName: "doc.badge.plus")) { [weak self] _ in
-      guard let presenter = self?.presenter else { return }
-      wm_apple_ios_new_document(presenter)
-    }
-    let viewport = UIDeferredMenuElement.uncached { [weak self] completion in
-      let state = self?.model.viewport
-      let toggles = ViewportToggle.all
-        .map { item in
-          let toggle = UIAction(title: item.title, image: UIImage(systemName: item.symbol)) { _ in
-            Engine.setting("viewport_toggle", item.name)
-          }
-          toggle.state = state?.bool(item.name) == true ? .on : .off
-          toggle.attributes = state == nil ? .disabled : []
-          return toggle
-        }
-      completion([UIMenu(title: "", options: .displayInline, children: toggles)])
-    }
-    let hide = UIAction(title: "Hide Interface", image: UIImage(systemName: "arrow.up.left.and.arrow.down.right")) {
-      [weak self] _ in
-      self?.setInterfaceHidden(true)
-    }
-    let desktop = UIAction(title: "Switch to Desktop Interface", image: UIImage(systemName: "macwindow")) { _ in
-      Engine.setting("interface", "desktop")
-    }
-    let settings = UIAction(title: "Settings", image: UIImage(systemName: "gearshape")) { [weak self] _ in
-      self?.settings?.present()
-    }
-    return UIMenu(children: [section([create]), viewport, section([hide, desktop]), section([settings])])
-  }
-
-  /** A narrow window's one menu: the panels, the view, One Finger, the selection mode and tool
-   * settings, then Share and More. */
-  func compactMenu() -> UIMenu {
-    func toggle(_ title: String, _ image: UIImage?, _ on: Bool, _ action: @escaping () -> Void) -> UIAction {
-      let toggle = UIAction(title: title, image: image) { _ in action() }
-      toggle.state = on ? .on : .off
-      return toggle
-    }
-    let panels = [
-      toggle("Outliner", BlenderIcon.image("OUTLINER"), model.hierarchyShown) { [shell] in
-        shell.panels.toggleHierarchy()
-      },
-      toggle("Timeline", UIImage(named: "blender.time")?.withRenderingMode(.alwaysTemplate), model.timelineShown) {
-        [shell] in shell.timeline.toggle()
-      },
-      toggle("Properties", BlenderIcon.image("PROPERTIES"), model.inspectorShown) { [shell] in
-        shell.panels.toggleInspector()
-      },
-    ]
-    let shading = UIAction(title: "Viewport Shading", image: UIImage(systemName: "circle.lefthalf.filled")) {
-      [model] _ in model.shadingOpen = true
-    }
-    let view = UIMenu(title: "View", image: UIImage(systemName: "eye"), children: ViewCommand.pie.map { command in
-      UIAction(title: command.title, image: command.image) { _ in command.run() }
-    })
-    let finger = UIMenu(title: "One Finger", image: UIImage(systemName: "hand.point.up"), children: [
-      toggle("Use Tool", wm_apple_ios_icon("control.finger_tool", "cursorarrow"), model.fingerUsesTool) {
-        [weak self] in self?.setFingerUsesTool(true)
-      },
-      toggle("Orbit View", wm_apple_ios_icon("operator.VIEW3D_OT_rotate", "rotate.3d"), !model.fingerUsesTool) {
-        [weak self] in self?.setFingerUsesTool(false)
-      },
-    ])
-    var editing: [UIMenuElement] = []
-    if model.mode == "mesh_edit" {
-      let modes = [("VERT", "Vertex Select", "circle.fill"), ("EDGE", "Edge Select", "line.diagonal"),
-                   ("FACE", "Face Select", "square.fill")]
-      editing.append(UIMenu(title: "Select Mode", image: wm_apple_ios_icon("mesh.VERT", "circle.fill"),
-                            children: modes.map { value, title, symbol in
-        toggle(title, wm_apple_ios_icon("mesh.\(value)", symbol), model.meshSelectMode == value) {
-          Engine.setting("mesh_select_mode", value)
-        }
-      }))
-    }
-    if transformTools.contains(model.activeTool) {
-      editing += TransformSetting.all.map { setting in
-        UIMenu(title: setting.title, image: wm_apple_ios_icon("control.\(setting.title)", setting.symbol),
-               children: setting.options.map { option in
-          toggle(option.title, setting.image(option), model.transformSettings[setting.key] == option.value) {
-            Engine.setting(setting.key, option.value)
-          }
-        })
-      }
-    }
-    else if model.toolSettingsShown {
-      editing.append(UIAction(title: "Tool Settings", image: UIImage(systemName: "slider.horizontal.3")) {
-        [model] _ in model.toolSettingsOpen = true
-      })
-    }
-    let share = UIMenu(title: "Share", image: UIImage(systemName: "square.and.arrow.up"),
-                       children: shareMenu().children)
-    return UIMenu(children: [section(panels), section([shading, view, finger]), section(editing),
-                             section([share])] + moreMenu().children)
-  }
-
   func setFingerUsesTool(_ useTool: Bool) {
     model.fingerUsesTool = useTool
     wm_apple_ios_window_set_finger_tool(model.window, useTool)
@@ -177,7 +42,7 @@ final class ShellCommands {
 #endif
   }
 
-  private func saveDocumentAs() {
+  func saveDocumentAs() {
     guard let document = wm_apple_ios_open_document() else { return }
     /* Save a copy wherever the person picks, as Files apps do for Save As. */
     document.save(to: document.fileURL, for: .forOverwriting) { [weak self] _ in
@@ -186,7 +51,7 @@ final class ShellCommands {
     }
   }
 
-  private func shareDocument() {
+  func shareDocument() {
     guard let document = wm_apple_ios_open_document() else { return }
     /* Share the file as it is now. */
     document.save(to: document.fileURL, for: .forOverwriting) { [weak self] _ in
@@ -196,7 +61,7 @@ final class ShellCommands {
     }
   }
 
-  private func saveAsTemplate() {
+  func saveAsTemplate() {
     let alert = UIAlertController(title: "Save as Template", message: nil, preferredStyle: .alert)
     alert.addTextField { field in
       field.placeholder = "Template Name"
@@ -359,10 +224,10 @@ struct DocumentToolbar: ToolbarContent {
     if model.compact {
       /* Everything else in one menu, as nothing else fits beside the most used items. */
       ToolbarItem(placement: .topBarTrailing) {
-        UIMenuButton(title: nil, image: UIImage(systemName: "ellipsis"), style: .plain,
-                     accessibilityLabel: "More", tint: .label, deferred: false) { commands.compactMenu() }
-          .frame(width: 44, height: 44)
+        Menu("More", systemImage: "ellipsis") { compactMenu }
           .background(ShareSource(commands: commands))
+          .prefetchingBlenderMenu(Self.importRoute)
+          .prefetchingBlenderMenu(Self.exportRoute)
           .shadingPopover(model: model, shell: shell)
           .popover(isPresented: $model.toolSettingsOpen) {
             shell.panels.toolSettingsContent { model.toolSettingsOpen = false }
@@ -385,10 +250,10 @@ struct DocumentToolbar: ToolbarContent {
     /* Undo, Share and More together. */
     ToolbarItemGroup(placement: .topBarTrailing) {
       undoButton
-      UIMenuButton(title: nil, image: UIImage(systemName: "square.and.arrow.up"), style: .plain,
-                   accessibilityLabel: "Share", tint: .label, deferred: false) { commands.shareMenu() }
-        .frame(width: 44, height: 44)
+      Menu("Share", systemImage: "square.and.arrow.up") { shareMenu }
         .background(ShareSource(commands: commands))
+        .prefetchingBlenderMenu(Self.importRoute)
+        .prefetchingBlenderMenu(Self.exportRoute)
         .accessibilityIdentifier("blender.share")
       Menu("More", systemImage: "ellipsis") { moreMenu }
         .accessibilityIdentifier("blender.actions")
@@ -433,6 +298,104 @@ struct DocumentToolbar: ToolbarContent {
       Label("Sidebar", systemImage: "sidebar.leading")
     }
     .accessibilityIdentifier("blender.sidebar")
+  }
+
+  static let importRoute = BlenderMenus.route("TOPBAR_MT_file_import")
+  static let exportRoute = BlenderMenus.route("TOPBAR_MT_file_export")
+
+  /** Share: what leaves the document. Documents save themselves, so
+   * there is no Save; going back to the documents keeps the work. */
+  @ViewBuilder
+  private var shareMenu: some View {
+    Section {
+      Button("Share…", systemImage: "square.and.arrow.up") { commands.shareDocument() }
+      Button("Save As…", systemImage: "doc.on.doc") { commands.saveDocumentAs() }
+    }
+    /* Blender's own Import and Export menus, so every format it and its add-ons support is
+     * listed. Their file browsers open the system's document picker. */
+    Section {
+      Menu { BlenderMenuItems(route: Self.importRoute) } label: { blenderLabel("Import", "IMPORT") }
+      Menu { BlenderMenuItems(route: Self.exportRoute) } label: { blenderLabel("Export", "EXPORT") }
+    }
+    Section {
+      Button("Render Image", systemImage: "photo") { commands.render?.renderAnimation(false) }
+      Button("Render Animation", systemImage: "film") { commands.render?.renderAnimation(true) }
+      /* Every earlier render, in the render sheet's film strip. */
+      Button("Renders", systemImage: "photo.stack") { commands.render?.showRenders() }
+    }
+    Button("Save as Template…", systemImage: "square.on.square") { commands.saveAsTemplate() }
+  }
+
+  private func blenderLabel(_ title: String, _ icon: String) -> some View {
+    Label { Text(title) } icon: { iconImage(BlenderIcon.image(icon)) }
+  }
+
+  /** A narrow window's one menu: the panels, the view, One Finger, the selection mode and tool
+   * settings, then Share and More. */
+  @ViewBuilder
+  private var compactMenu: some View {
+    Section {
+      sidebarToggle("Outliner", icon: BlenderIcon.image("OUTLINER"), isOn: model.hierarchyShown) {
+        shell.panels.toggleHierarchy()
+      }
+      sidebarToggle("Timeline", icon: UIImage(named: "blender.time")?.withRenderingMode(.alwaysTemplate),
+                    isOn: model.timelineShown) { shell.timeline.toggle() }
+      sidebarToggle("Properties", icon: BlenderIcon.image("PROPERTIES"), isOn: model.inspectorShown) {
+        shell.panels.toggleInspector()
+      }
+    }
+    Section {
+      Button("Viewport Shading", systemImage: "circle.lefthalf.filled") { model.shadingOpen = true }
+      Menu {
+        ForEach(ViewCommand.pie, id: \.command) { command in
+          Button { command.run() } label: { Label { Text(command.title) } icon: { iconImage(command.image) } }
+        }
+      } label: {
+        Label("View", systemImage: "eye")
+      }
+      Menu {
+        sidebarToggle("Use Tool", icon: wm_apple_ios_icon("control.finger_tool", "cursorarrow"),
+                      isOn: model.fingerUsesTool) { commands.setFingerUsesTool(true) }
+        sidebarToggle("Orbit View", icon: wm_apple_ios_icon("operator.VIEW3D_OT_rotate", "rotate.3d"),
+                      isOn: !model.fingerUsesTool) { commands.setFingerUsesTool(false) }
+      } label: {
+        Label("One Finger", systemImage: "hand.point.up")
+      }
+    }
+    Section {
+      if model.mode == "mesh_edit" {
+        Menu {
+          ForEach([("VERT", "Vertex Select", "circle.fill"), ("EDGE", "Edge Select", "line.diagonal"),
+                   ("FACE", "Face Select", "square.fill")], id: \.0) { value, title, symbol in
+            sidebarToggle(title, icon: wm_apple_ios_icon("mesh.\(value)", symbol),
+                          isOn: model.meshSelectMode == value) { Engine.setting("mesh_select_mode", value) }
+          }
+        } label: {
+          Label { Text("Select Mode") } icon: { iconImage(wm_apple_ios_icon("mesh.VERT", "circle.fill")) }
+        }
+      }
+      if transformTools.contains(model.activeTool) {
+        ForEach(TransformSetting.all, id: \.key) { setting in
+          Menu {
+            ForEach(setting.options, id: \.value) { option in
+              sidebarToggle(option.title, icon: setting.image(option),
+                            isOn: model.transformSettings[setting.key] == option.value) {
+                Engine.setting(setting.key, option.value)
+              }
+            }
+          } label: {
+            Label { Text(setting.title) } icon: {
+              iconImage(wm_apple_ios_icon("control.\(setting.title)", setting.symbol))
+            }
+          }
+        }
+      }
+      else if model.toolSettingsShown {
+        Button("Tool Settings", systemImage: "slider.horizontal.3") { model.toolSettingsOpen = true }
+      }
+    }
+    Menu { shareMenu } label: { Label("Share", systemImage: "square.and.arrow.up") }
+    moreMenu
   }
 
   /** More: smaller things, with viewport options showing their current state. */

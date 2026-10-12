@@ -90,10 +90,7 @@ struct ActionsOrnament: View {
         QuickActionButton(action: action, model: model, onGlass: true)
       }
       if !actions.contains(where: { !$0.key.isEmpty }) {
-        UIMenuButton(title: nil, image: UIImage(systemName: "ellipsis"), style: .plain,
-                     accessibilityLabel: "Actions", tint: .label, deferred: false) {
-          wm_apple_ios_context_menu()
-        }
+        ContextMenuButton()
         .frame(width: 44, height: 44)
         .accessibilityIdentifier("blender.context-menu")
       }

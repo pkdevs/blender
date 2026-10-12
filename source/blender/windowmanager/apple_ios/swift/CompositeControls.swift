@@ -376,12 +376,13 @@ struct ListToolbar: View {
                 }
               }
               if let menu = property.string("menu") {
-                BlenderMenuSection(store: store, menu: menu, tab: property.string("tab") ?? "")
+                Section { BlenderMenuItems(route: BlenderMenus.route(menu, tab: property.string("tab"))) }
               }
             } label: {
               Image(systemName: "ellipsis")
                 .frame(width: 40, height: 32)
             }
+            .prefetchingBlenderMenu(BlenderMenus.route(property.string("menu") ?? "", tab: property.string("tab")))
             .tint(.primary)
             .disabled(!editable)
             .accessibilityLabel("More")
@@ -412,54 +413,6 @@ struct ListToolbar: View {
   private func runOperator(_ op: JSON) {
     store.request(["key": op.string("key") ?? "", "panel": property.string("panel") ?? "",
                    "tab": property.string("tab") ?? ""], extra: ["type": "OPERATOR"])
-  }
-}
-
-/** A Blender menu's items inline in a SwiftUI menu, built from the `UIMenu` Blender provides. */
-struct BlenderMenuSection: View {
-  let store: InspectorStore
-  let menu: String
-  let tab: String
-
-  var body: some View {
-    if let provided = store.menuProvider?(["type": "MENU", "menu": menu, "key": menu, "tab": tab,
-                                           "label": ""] as NSDictionary)
-    {
-      Section {
-        ForEach(Array(flatten(provided.children).enumerated()), id: \.offset) { _, element in
-          Button {
-            element.perform()
-          } label: {
-            Label {
-              Text(element.title)
-            } icon: {
-              if let image = element.image { Image(uiImage: image) }
-            }
-          }
-          .disabled(element.disabled)
-        }
-      }
-    }
-  }
-
-  struct Element {
-    let title: String
-    let image: UIImage?
-    let disabled: Bool
-    let perform: () -> Void
-  }
-
-  private func flatten(_ children: [UIMenuElement]) -> [Element] {
-    children.flatMap { child -> [Element] in
-      if let menu = child as? UIMenu { return flatten(menu.children) }
-      if let action = child as? UIAction {
-        return [Element(title: action.title, image: action.image,
-                        disabled: action.attributes.contains(.disabled)) {
-          action.performWithSender(nil, target: nil)
-        }]
-      }
-      return []
-    }
   }
 }
 

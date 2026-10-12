@@ -137,7 +137,6 @@ final class InspectorStore {
   /** Bumped when controls must drop local editing state, e.g. on selection change. */
   private(set) var generation = 0
 
-  @ObservationIgnored var menuProvider: ((NSDictionary) -> UIMenu?)?
   @ObservationIgnored var visible = true
   @ObservationIgnored private var snapshot: JSON?
   @ObservationIgnored private var shownTab: String?
