@@ -101,6 +101,7 @@ class GVArrayCommon {
  public:
   const CPPType &type() const;
   operator bool() const;
+  template<typename T> bool is_type() const;
 
   int64_t size() const;
   bool is_empty() const;
@@ -760,6 +761,11 @@ template<typename T> inline bool GVArrayCommon::try_assign_VArray(VArray<T> &var
 inline const CPPType &GVArrayCommon::type() const
 {
   return impl_->type();
+}
+
+template<typename T> inline bool GVArrayCommon::is_type() const
+{
+  return impl_->type().is<T>();
 }
 
 inline GVArrayCommon::operator bool() const

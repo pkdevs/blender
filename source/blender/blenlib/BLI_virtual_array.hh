@@ -700,6 +700,15 @@ template<typename T> class VArrayCommon {
   {
     return impl_.get();
   }
+
+  /**
+   * Checks whether this #VArray is of a specific type at compile time. This mainly exists for
+   * compatibility with GVArrayCommon::is_type.
+   */
+  template<typename U> constexpr bool is_type() const
+  {
+    return std::is_same_v<T, U>();
+  }
 };
 
 template<typename T> class VMutableArray;
@@ -1160,20 +1169,27 @@ template<typename T> class VArrayRef {
 
 /** To be used with #call_with_devirtualized_parameters. */
 template<typename T, bool UseSingle, bool UseSpan> struct VArrayDevirtualizer {
-  const VArray<T> &varray;
+ private:
+  CommonVArrayInfo info_;
+  int64_t size_;
+
+ public:
+  template<typename VArrayT>
+  VArrayDevirtualizer(const VArrayT &varray) : info_(varray.common_info()), size_(varray.size())
+  {
+    BLI_assert(varray.template is_type<T>());
+  }
 
   template<typename Fn> bool devirtualize(const Fn &fn) const
   {
-    const CommonVArrayInfo info = this->varray.common_info();
-    const int64_t size = this->varray.size();
     if constexpr (UseSingle) {
-      if (info.type == CommonVArrayInfo::Type::Single) {
-        return fn(SingleAsSpan<T>(*static_cast<const T *>(info.data), size));
+      if (info_.type == CommonVArrayInfo::Type::Single) {
+        return fn(SingleAsSpan<T>(*static_cast<const T *>(info_.data), size_));
       }
     }
     if constexpr (UseSpan) {
-      if (info.type == CommonVArrayInfo::Type::Span) {
-        return fn(Span<T>(static_cast<const T *>(info.data), size));
+      if (info_.type == CommonVArrayInfo::Type::Span) {
+        return fn(Span<T>(static_cast<const T *>(info_.data), size_));
       }
     }
     return false;

@@ -29,26 +29,6 @@ enum class FallbackMode {
   Materialized,
 };
 
-template<typename T, bool UseSingle, bool UseSpan> struct SpanOrSingleDevirtualizer {
-  CommonVArrayInfo info;
-  int64_t size;
-
-  template<typename Fn> bool devirtualize(const Fn &fn) const
-  {
-    if constexpr (UseSingle) {
-      if (this->info.type == CommonVArrayInfo::Type::Single) {
-        return fn(SingleAsSpan<T>(*static_cast<const T *>(this->info.data), this->size));
-      }
-    }
-    if constexpr (UseSpan) {
-      if (this->info.type == CommonVArrayInfo::Type::Span) {
-        return fn(Span<T>(static_cast<const T *>(this->info.data), this->size));
-      }
-    }
-    return false;
-  }
-};
-
 /**
  * These presets determine what code is generated for evaluation. Different presets make different
  * trade-offs between run-time performance and compile-time/binary size.
@@ -96,8 +76,7 @@ struct AllSpanOrSingle {
       using T = typename ParamTag::base_type;
       if constexpr (ParamTag::category == ParamCategory::Input) {
         const auto &varray_impl = *std::get<I>(loaded_params);
-        return SpanOrSingleDevirtualizer<T, true, true>{varray_impl.common_info(),
-                                                        varray_impl.size()};
+        return VArrayDevirtualizer<T, true, true>{varray_impl.common_info(), varray_impl.size()};
       }
       else if constexpr (ELEM(ParamTag::category, ParamCategory::Output, ParamCategory::Mutable)) {
         T *ptr = std::get<I>(loaded_params);
@@ -128,8 +107,8 @@ template<size_t... Indices> struct SomeSpanOrSingle {
       if constexpr (ParamTag::category == ParamCategory::Input) {
         constexpr bool UseSpan = ValueSequence<size_t, Indices...>::template contains<I>();
         const auto &varray_impl = *std::get<I>(loaded_params);
-        return SpanOrSingleDevirtualizer<T, true, UseSpan>{varray_impl.common_info(),
-                                                           varray_impl.size()};
+        return VArrayDevirtualizer<T, true, UseSpan>{varray_impl.common_info(),
+                                                     varray_impl.size()};
       }
       else if constexpr (ELEM(ParamTag::category, ParamCategory::Output, ParamCategory::Mutable)) {
         T *ptr = std::get<I>(loaded_params);
