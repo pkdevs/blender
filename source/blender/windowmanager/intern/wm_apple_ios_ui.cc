@@ -64,6 +64,8 @@
 #include "IMB_imbuf.hh"
 #include "IMB_imbuf_types.hh"
 
+#include "MEM_guardedalloc.h"
+
 #include "RNA_access.hh"
 #include "RNA_define.hh"
 
@@ -97,6 +99,7 @@
 #include <cstring>
 #include <functional>
 #include <map>
+#include <optional>
 #include <sstream>
 #include <string>
 #include <string_view>
@@ -269,6 +272,7 @@ std::string ios_toolbar_json =
     "{\"mode\":\"objectmode\",\"active\":\"builtin.select_box\",\"tools\":[]}";
 
 std::string ios_json_escape(const std::string &value);
+void ios_brush_direction_set(bContext *C, bool add);
 
 void ios_action_add_key(std::vector<IOSActionItem> &items,
                         const char *title,
@@ -934,6 +938,21 @@ void ios_setting_execute(bContext *C, const IOSSettingCommand &command)
     ios_context_pop(C, context_store);
     return;
   }
+  if (command.setting == "native_brush") {
+    /* The sidebar's size and strength, and the color well, see `bl_ui.native_brush`. A drag
+     * sends many values and one undo step as it ends. */
+    const IOSContextStore context_store = ios_context_push_view3d(C);
+    const char *imports[] = {"bpy", "bl_ui", nullptr};
+    const std::string expression = "bl_ui.native_brush.brush_set(bpy.context, \"" +
+                                   ios_json_escape(command.value) + "\")";
+    BPY_run_string_eval(C, imports, expression.c_str());
+    if (command.value.find("\"commit\":true") != std::string::npos) {
+      ED_undo_push(C, "Brush Setting");
+    }
+    WM_main_add_notifier(NC_BRUSH | NA_EDITED, nullptr);
+    ios_context_pop(C, context_store);
+    return;
+  }
   if (command.setting == "native_action") {
     /* The button may predate a context change; `run` checks the action still applies. */
     const bToolRef *tool = ios_active_tool(C);
@@ -960,6 +979,10 @@ void ios_setting_execute(bContext *C, const IOSSettingCommand &command)
 #endif
   if (command.setting == "object_mode") {
     ios_mode_set(C, command.value.c_str());
+    return;
+  }
+  if (command.setting == "brush_direction") {
+    ios_brush_direction_set(C, command.value == "add");
     return;
   }
   if (command.setting == "constraint_axis") {
@@ -1455,6 +1478,104 @@ std::string ios_brushes_build_json(bContext *C, const eContextObjectMode mode)
   return json;
 }
 
+/** Modes that stroke brushes, where the + and - pill picks the stroke's direction. */
+bool ios_mode_strokes(const eContextObjectMode mode)
+{
+  return ELEM(mode,
+              CTX_MODE_SCULPT,
+              CTX_MODE_PAINT_WEIGHT,
+              CTX_MODE_PAINT_VERTEX,
+              CTX_MODE_PAINT_TEXTURE,
+              CTX_MODE_SCULPT_CURVES,
+              CTX_MODE_SCULPT_GREASE_PENCIL,
+              CTX_MODE_WEIGHT_GREASE_PENCIL,
+              CTX_MODE_VERTEX_GREASE_PENCIL);
+}
+
+/** The active brush's Direction, for sculpt brushes that have one. */
+std::optional<PointerRNA> ios_brush_direction_ptr(bContext *C)
+{
+  if (CTX_data_mode_enum(C) != CTX_MODE_SCULPT) {
+    return std::nullopt;
+  }
+  Paint *paint = BKE_paint_get_active_from_context(C);
+  Brush *brush = paint ? BKE_paint_brush(paint) : nullptr;
+  if (brush == nullptr) {
+    return std::nullopt;
+  }
+  PointerRNA brush_ptr = RNA_id_pointer_create(&brush->id);
+  PointerRNA capabilities = RNA_pointer_get(&brush_ptr, "sculpt_capabilities");
+  if (!RNA_boolean_get(&capabilities, "has_direction")) {
+    return std::nullopt;
+  }
+  return brush_ptr;
+}
+
+/**
+ * The + and - pill in modes that stroke brushes: which way strokes go, and for brushes with a
+ * Direction, its two choices' names (such as Inflate and Deflate). Painting colors has no two
+ * ways to go, and hides it. Null elsewhere, where the pill adds to or subtracts from the
+ * selection.
+ */
+std::string ios_direction_json(bContext *C, const eContextObjectMode mode)
+{
+  if (!ios_mode_strokes(mode)) {
+    return "null";
+  }
+  std::optional<PointerRNA> brush_ptr = ios_brush_direction_ptr(C);
+  if (!brush_ptr) {
+    const bool colors = ELEM(mode,
+                             CTX_MODE_SCULPT,
+                             CTX_MODE_PAINT_TEXTURE,
+                             CTX_MODE_PAINT_VERTEX,
+                             CTX_MODE_VERTEX_GREASE_PENCIL);
+    return colors ? "{\"hidden\":true}" : "{\"brush\":false}";
+  }
+  PropertyRNA *prop = RNA_struct_find_property(&*brush_ptr, "direction");
+  const EnumPropertyItem *items = nullptr;
+  int count = 0;
+  bool free = false;
+  RNA_property_enum_items_gettexted(C, &*brush_ptr, prop, &items, &count, &free);
+  std::string names[2];
+  for (int i = 0, n = 0; i < count && n < 2; i++) {
+    if (items[i].identifier[0] != '\0') {
+      names[n++] = items[i].name;
+    }
+  }
+  if (free) {
+    MEM_delete(items);
+  }
+  const Brush *brush = static_cast<const Brush *>(brush_ptr->data);
+  return "{\"brush\":true,\"inverted\":" +
+         std::string((brush->flag & BRUSH_DIR_IN) ? "true" : "false") + ",\"add\":\"" +
+         ios_json_escape(names[0]) + "\",\"subtract\":\"" + ios_json_escape(names[1]) + "\"}";
+}
+
+/** Set the active brush's Direction to its first (\a add) or second choice. */
+void ios_brush_direction_set(bContext *C, const bool add)
+{
+  const IOSContextStore context_store = ios_context_push_view3d(C);
+  std::optional<PointerRNA> brush_ptr = ios_brush_direction_ptr(C);
+  if (!brush_ptr) {
+    return;
+  }
+  PropertyRNA *prop = RNA_struct_find_property(&*brush_ptr, "direction");
+  const EnumPropertyItem *items = nullptr;
+  int count = 0;
+  bool free = false;
+  RNA_property_enum_items(C, &*brush_ptr, prop, &items, &count, &free);
+  int values[2] = {0, 0};
+  for (int i = 0, n = 0; i < count && n < 2; i++) {
+    if (items[i].identifier[0] != '\0') {
+      values[n++] = items[i].value;
+    }
+  }
+  if (free) {
+    MEM_delete(items);
+  }
+  ios_rna_undo_push(C, ios_rna_enum_set(C, *brush_ptr, "direction", values[add ? 0 : 1]));
+}
+
 void ios_brush_activate(bContext *C, const std::string &key)
 {
   const IOSContextStore context_store = ios_context_push_view3d(C);
@@ -1825,6 +1946,7 @@ std::string ios_toolbar_build_json_for_context(bContext *C)
   std::string render_json = "null";
   std::string viewport_json = "null";
   std::string preferences_json = "null";
+  std::string brush_json = "null";
   std::string quick_actions_json;
 #ifdef WITH_PYTHON
   if (has_view3d_context) {
@@ -1842,7 +1964,8 @@ std::string ios_toolbar_build_json_for_context(bContext *C)
     for (auto [expression, target] :
          {std::pair{"bl_ui.native_render.status_json(bpy.context)", &render_json},
           std::pair{"bl_ui.native_render.viewport_json(bpy.context)", &viewport_json},
-          std::pair{"bl_ui.native_settings.preferences_json(bpy.context)", &preferences_json}})
+          std::pair{"bl_ui.native_settings.preferences_json(bpy.context)", &preferences_json},
+          std::pair{"bl_ui.native_brush.brush_json(bpy.context)", &brush_json}})
     {
       result = nullptr;
       if (BPY_run_string_as_string(C, imports, expression, nullptr, &result)) {
@@ -1999,6 +2122,10 @@ std::string ios_toolbar_build_json_for_context(bContext *C)
   json += tools_json;
   json += ",\"brushes\":";
   json += ios_brushes_json;
+  json += ",\"brush\":";
+  json += brush_json;
+  json += ",\"direction\":";
+  json += has_view3d_context ? ios_direction_json(C, mode) : "null";
   json += ",\"panels\":";
   json += panels_json;
   json += ",\"render\":";
@@ -2853,6 +2980,13 @@ extern "C" void WM_apple_ios_ui_flush_commands(bContext *C)
     const auto *a = std::get_if<IOSSettingCommand>(&previous);
     const auto *b = std::get_if<IOSSettingCommand>(&next);
     if (a && b && a->setting == "timeline_frame" && b->setting == "timeline_frame") {
+      return true;
+    }
+    /* A brush slider's newer value, unless the older one ended its drag. */
+    if (a && b && a->setting == "native_brush" && b->setting == "native_brush" &&
+        a->value.find("\"commit\":true") == std::string::npos &&
+        a->value.substr(0, a->value.find(',')) == b->value.substr(0, b->value.find(',')))
+    {
       return true;
     }
     const auto *drag_a = std::get_if<IOSAssetDragCommand>(&previous);

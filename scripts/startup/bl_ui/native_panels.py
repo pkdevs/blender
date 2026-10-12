@@ -379,22 +379,9 @@ class VIEW3D_PT_native_sculpt_settings(bpy.types.Panel):
                 region is not None and region.type == 'WINDOW')
 
     def draw(self, context):
-        from bl_ui.properties_paint_common import UnifiedPaintPanel
-
+        # The brush's size, strength, direction and color are in the sidebar beside the viewport
+        # and above the brushes, see `bl_ui.native_brush`.
         layout = self.layout
-        settings = UnifiedPaintPanel.paint_settings(context)
-        brush = settings.brush if settings else None
-        if brush is not None:
-            ups = settings.unified_paint_settings
-            size_owner = ups if ups.use_unified_size else brush
-            size_prop = "unprojected_size" if size_owner.use_locked_size == 'SCENE' else "size"
-            layout.prop(size_owner, size_prop, text="Radius", slider=True)
-            strength_owner = ups if ups.use_unified_strength else brush
-            layout.prop(strength_owner, "strength", text="Strength", slider=True)
-            if brush.sculpt_capabilities.has_direction:
-                # Two or three choices: shown as a segmented control, a single tap each.
-                layout.prop(brush, "direction", text="Direction", expand=True)
-
         obj = context.sculpt_object
         dyntopo = obj.use_dynamic_topology_sculpting
         layout.operator(
@@ -403,13 +390,14 @@ class VIEW3D_PT_native_sculpt_settings(bpy.types.Panel):
             icon='CHECKBOX_HLT' if dyntopo else 'CHECKBOX_DEHLT',
         )
         if dyntopo:
+            # Beside the toggle, a number to type or drag rather than a slider.
             sculpt = context.tool_settings.sculpt
             if sculpt.detail_type_method in {'CONSTANT', 'MANUAL'}:
-                layout.prop(sculpt, "constant_detail_resolution", text="Detail", slider=True)
+                layout.prop(sculpt, "constant_detail_resolution", text="Detail")
             elif sculpt.detail_type_method == 'BRUSH':
-                layout.prop(sculpt, "detail_percent", text="Detail", slider=True)
+                layout.prop(sculpt, "detail_percent", text="Detail")
             else:
-                layout.prop(sculpt, "detail_size", text="Detail", slider=True)
+                layout.prop(sculpt, "detail_size", text="Detail")
         _draw_mirror(layout, context)
 
 
@@ -526,32 +514,19 @@ class VIEW3D_PT_native_brush_settings(bpy.types.Panel):
         mode = context.mode
         settings = UnifiedPaintPanel.paint_settings(context)
         brush = settings.brush
-        grease_pencil = mode in {'PAINT_GREASE_PENCIL', 'SCULPT_GREASE_PENCIL',
-                                 'WEIGHT_GREASE_PENCIL', 'VERTEX_GREASE_PENCIL'}
         draw_type = brush.gpencil_brush_type if mode == 'PAINT_GREASE_PENCIL' else None
 
-        if draw_type != 'FILL':
-            # Grease Pencil drawing sizes its strokes from the brush, as its header does.
-            size_owner = brush if draw_type else _unified_owner(settings, brush, "size")
-            size_prop = "unprojected_size" if size_owner.use_locked_size == 'SCENE' else "size"
-            layout.prop(size_owner, size_prop, text="Size" if grease_pencil else "Radius", slider=True)
-            strength_owner = brush if draw_type else _unified_owner(settings, brush, "strength")
-            layout.prop(strength_owner, "strength", text="Strength", slider=True)
-
+        # The brush's size, strength and color are in the sidebar beside the viewport and above
+        # the brushes, see `bl_ui.native_brush`.
         if draw_type in {'DRAW', 'FILL'}:
             paint = context.tool_settings.gpencil_paint
             layout.prop(paint, "color_mode", text="Color Mode", expand=True)
-            if paint.color_mode == 'VERTEXCOLOR':
-                # Strokes take the brush's own color, never the unified one, as in the header.
-                layout.prop(brush, "color", text="Color")
-            else:
+            if paint.color_mode != 'VERTEXCOLOR':
                 layout.prop(context.window_manager, "native_grease_pencil_material", text="Material")
         if draw_type == 'FILL':
             layout.prop(brush.gpencil_settings, "fill_direction", text="Direction", expand=True)
         elif draw_type == 'ERASE':
             layout.prop(brush.gpencil_settings, "eraser_mode", text="Mode", expand=True)
-        elif mode in {'PAINT_VERTEX', 'PAINT_TEXTURE', 'VERTEX_GREASE_PENCIL'} or draw_type == 'TINT':
-            layout.prop(_unified_owner(settings, brush, "color"), "color", text="Color")
         elif mode in {'PAINT_WEIGHT', 'WEIGHT_GREASE_PENCIL'}:
             layout.prop(_unified_owner(settings, brush, "weight"), "weight", text="Weight", slider=True)
         _draw_mirror(layout, context)

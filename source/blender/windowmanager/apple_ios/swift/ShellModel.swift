@@ -28,6 +28,10 @@ final class ShellModel {
    * change an operator makes, once per action. */
   private(set) var menuContext = ""
   private(set) var brushes: JSON?
+  /** The brush's size, strength and color, and Dyntopo's detail, see `bl_ui.native_brush`. */
+  private(set) var brush: JSON?
+  /** Which way brushes stroke, in modes that paint with them; none where Blender selects. */
+  private(set) var direction: JSON?
   private(set) var canUndo = false
   /** Adjust Last Operation: the last operator's settings, or none. */
   private(set) var redo: JSON?
@@ -111,6 +115,8 @@ final class ShellModel {
     set(\.activeTool, toolbar.string("active") ?? "")
     set(\.actions, toolbar.array("actions"), equal: jsonListEqual)
     set(\.brushes, toolbar.dict("brushes"), equal: { jsonEqual($0, $1) })
+    set(\.direction, toolbar.dict("direction"), equal: { jsonEqual($0, $1) })
+    set(\.brush, toolbar.dict("brush"), equal: { jsonEqual($0, $1) })
     set(\.canUndo, toolbar.bool("canUndo"))
     set(\.menuContext, "\(toolbar.string("objectMode") ?? "")|\(toolbar.string("menuState") ?? "")")
     set(\.redo, toolbar.dict("redo"), equal: { jsonEqual($0, $1) })
