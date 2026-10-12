@@ -144,15 +144,10 @@ class WhiteNoiseFunction : public mf::MultiFunction {
       case 2: {
         const VArray<float3> &vector = params.readonly_single_input<float3>(0, "Vector");
         if (compute_color) {
-          mask.foreach_index([&](const int64_t i) {
-            const float3 c = noise::hash_float_to_float3(float2(vector[i].x, vector[i].y));
-            r_color[i] = ColorGeometry4f(c[0], c[1], c[2], 1.0f);
-          });
+          noise::hash_float2_to_color(mask, vector, r_color);
         }
         if (compute_value) {
-          mask.foreach_index([&](const int64_t i) {
-            r_value[i] = noise::hash_float_to_float(float2(vector[i].x, vector[i].y));
-          });
+          noise::hash_float2_to_float(mask, vector, r_value);
         }
         break;
       }

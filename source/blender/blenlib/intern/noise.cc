@@ -105,7 +105,7 @@ uint32_t hash(uint32_t kx)
   return c;
 }
 
-uint32_t hash(uint32_t kx, uint32_t ky)
+ATTR_ALWAYS_INLINE_EMIT uint32_t hash(uint32_t kx, uint32_t ky)
 {
   uint32_t a, b, c;
   a = b = c = 0xdeadbeef + (2 << 2) + 13;
@@ -205,7 +205,7 @@ uint32_t hash_float(float kx)
   return hash(float_as_uint(kx));
 }
 
-uint32_t hash_float(float2 k)
+ATTR_ALWAYS_INLINE_EMIT uint32_t hash_float(float2 k)
 {
   return hash(float_as_uint(k.x), float_as_uint(k.y));
 }
@@ -259,7 +259,7 @@ float hash_float_to_float(float k)
   return uint_to_float_01(hash_float(k));
 }
 
-float hash_float_to_float(float2 k)
+ATTR_ALWAYS_INLINE_EMIT float hash_float_to_float(float2 k)
 {
   return uint_to_float_01(hash_float(k));
 }
@@ -286,6 +286,18 @@ void hash_float_to_float(const IndexMask &mask,
       varray_exec::exec_presets::MaterializeOptimize());
 }
 
+void hash_float2_to_float(const IndexMask &mask,
+                          const VArray<float3> &ks,
+                          MutableSpan<float> r_values)
+{
+  varray_exec::execute_1in_1out_uninitialized(
+      mask,
+      ks,
+      r_values,
+      [](const float3 &k) { return hash_float_to_float(float2(k.x, k.y)); },
+      varray_exec::exec_presets::MaterializeOptimize());
+}
+
 void hash_float_to_color(const IndexMask &mask,
                          const VArray<float3> &ks,
                          MutableSpan<ColorGeometry4f> r_values)
@@ -296,6 +308,21 @@ void hash_float_to_color(const IndexMask &mask,
       r_values,
       [](const float3 &k) {
         const float3 c = hash_float_to_float3(k);
+        return ColorGeometry4f(c[0], c[1], c[2], 1.0f);
+      },
+      varray_exec::exec_presets::MaterializeOptimize());
+}
+
+void hash_float2_to_color(const IndexMask &mask,
+                          const VArray<float3> &ks,
+                          MutableSpan<ColorGeometry4f> r_values)
+{
+  varray_exec::execute_1in_1out_uninitialized(
+      mask,
+      ks,
+      r_values,
+      [](const float3 &k) {
+        const float3 c = hash_float_to_float3(float2(k.x, k.y));
         return ColorGeometry4f(c[0], c[1], c[2], 1.0f);
       },
       varray_exec::exec_presets::MaterializeOptimize());
@@ -325,7 +352,7 @@ float3 hash_float_to_float3(float k)
                 hash_float_to_float(float2(k, 2.0)));
 }
 
-float3 hash_float_to_float3(float2 k)
+ATTR_ALWAYS_INLINE_EMIT float3 hash_float_to_float3(float2 k)
 {
   return float3(hash_float_to_float(k),
                 hash_float_to_float(float3(k.x, k.y, 1.0)),
