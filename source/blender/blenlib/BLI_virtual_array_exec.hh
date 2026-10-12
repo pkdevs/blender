@@ -18,6 +18,9 @@
  * the number of inputs. Instead, other execution presets like #SomeSpanOrSingle or #Materialized
  * can be used which can offer close to the same performance in most cases without many of the
  * downsides.
+ *
+ * The main entry point in the API is the #varray_exec::execute function and its corresponding
+ * utilities for specific parameter counts.
  */
 
 #include "BLI_devirtualize_parameters.hh"
