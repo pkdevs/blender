@@ -179,7 +179,7 @@ template<typename... ParamTags, typename ElementFn, typename... Chunks>
 inline void execute_materialized_hot_loop(TypeSequence<ParamTags...> /*param_tags*/,
                                           const ElementFn &element_fn,
                                           const int64_t size,
-                                          Chunks &&__restrict... chunks)
+                                          Chunks *__restrict... chunks)
 {
   for (int64_t i = 0; i < size; i++) {
     element_fn(chunks[i]...);
