@@ -560,12 +560,20 @@ inline void execute_multi_in_1out_uninitialized(const IndexMask &mask,
 {
   constexpr auto param_tags =
       TypeSequence<ParamTag<ParamCategory::Input, In>..., ParamTag<ParamCategory::Output, Out>>();
-  execute([&](const In &...in, Out &out) { new (&out) Out(element_fn(in...)); },
-          exec_preset,
-          mask,
-          param_tags,
-          in_params...,
-          out_param);
+  execute(
+      [&](const In &...in, Out &out) {
+        if constexpr (std::is_trivially_copy_constructible_v<Out>) {
+          out = element_fn(in...);
+        }
+        else {
+          new (&out) Out(element_fn(in...));
+        }
+      },
+      exec_preset,
+      mask,
+      param_tags,
+      in_params...,
+      out_param);
 }
 
 template<typename In1,
