@@ -34,11 +34,11 @@
 #  define ATTR_NO_SIGNED_INT_OVERFLOW
 #endif
 
-/* TODO: Comment why ATTR_ALWAYS_INLINE_EMIT is needed (batch vectorization / -fPIC). */
-#if defined(_MSC_VER) && !defined(__clang__)
-#  define ATTR_ALWAYS_INLINE_EMIT __forceinline
+/* This is required so that clang fully flattens noise code so that it can vectorize it. */
+#if defined(__clang__)
+#  define ATTR_ALWAYS_INLINE_EMIT [[gnu::always_inline]]
 #else
-#  define ATTR_ALWAYS_INLINE_EMIT [[gnu::always_inline, gnu::used]]
+#  define ATTR_ALWAYS_INLINE_EMIT
 #endif
 
 namespace blender::noise {
@@ -279,18 +279,26 @@ void hash_float_to_float(const IndexMask &mask,
                          MutableSpan<float> r_values)
 {
   varray_exec::execute_1in_1out_uninitialized(
-      mask, ks, r_values, [](const float3 &k) { return hash_float_to_float(k); });
+      mask,
+      ks,
+      r_values,
+      [](const float3 &k) { return hash_float_to_float(k); },
+      varray_exec::exec_presets::MaterializeOptimize());
 }
 
 void hash_float_to_color(const IndexMask &mask,
                          const VArray<float3> &ks,
                          MutableSpan<ColorGeometry4f> r_values)
 {
-
-  varray_exec::execute_1in_1out_uninitialized(mask, ks, r_values, [](const float3 &k) {
-    const float3 c = hash_float_to_float3(k);
-    return ColorGeometry4f(c[0], c[1], c[2], 1.0f);
-  });
+  varray_exec::execute_1in_1out_uninitialized(
+      mask,
+      ks,
+      r_values,
+      [](const float3 &k) {
+        const float3 c = hash_float_to_float3(k);
+        return ColorGeometry4f(c[0], c[1], c[2], 1.0f);
+      },
+      varray_exec::exec_presets::MaterializeOptimize());
 }
 
 float2 hash_float_to_float2(float2 k)

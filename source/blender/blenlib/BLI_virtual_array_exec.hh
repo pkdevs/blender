@@ -51,6 +51,20 @@ enum class FallbackMode {
   Materialized,
 };
 
+/** Depending on the use-case, it may be benefitial to explicitly instruct the compiler to flatten
+ * or unroll a loop. */
+struct MaterializeCompilerAttributes {
+  /**
+   * Indicates the compiler that a function should be flattened as much as possible. This is
+   * important for the compiler to recognize that it can perform auto-vectorization.
+   */
+  bool flatten = false;
+  /**
+   * Explicit loop unrolling can be benefitial in hot loops.
+   */
+  bool unroll = false;
+};
+
 /**
  * These presets determine what code is generated for evaluation. Different presets make different
  * trade-offs between run-time performance and compile-time/binary size.
@@ -73,10 +87,14 @@ struct Simple {
  * because inputs are retrieved from the virtual arrays in chunks, reducing virtual method call
  * overhead.
  */
-struct Materialized {
+template<MaterializeCompilerAttributes Attrs = {}> struct MaterializedT {
   static constexpr bool use_devirtualization = false;
   static constexpr FallbackMode fallback_mode = FallbackMode::Materialized;
+  static constexpr MaterializeCompilerAttributes materialize_attributes = Attrs;
 };
+using Materialized = MaterializedT<>;
+using MaterializeOptimize =
+    MaterializedT<MaterializeCompilerAttributes{.flatten = true, .unroll = true}>;
 
 /**
  * The most efficient preset, but also potentially generates a lot of code (exponential in the
@@ -271,13 +289,11 @@ struct TypeSplitInfo<ColorTheme4<ChannelT>>
     : TypeSplitInfoColorRGBA<ColorTheme4<ChannelT>, ChannelT> {};
 
 template<int64_t MaxChunkSize,
+         bool UnrollLoops,
          typename ElementFn,
          size_t... I,
          typename... ParamTags,
          typename... Args>
-#if (defined(__GNUC__) && !defined(__clang__))
-[[gnu::optimize("-funroll-loops")]] [[gnu::optimize("O3")]]
-#endif
 inline void execute_chunked_hot_loop(const ElementFn &element_fn,
                                      TypeSequence<ParamTags...> /*param_tags*/,
                                      std::index_sequence<I...> /*indices*/,
@@ -302,7 +318,7 @@ inline void execute_chunked_hot_loop(const ElementFn &element_fn,
       }(),
       ...);
 
-  for (int64_t i = 0; i < size; i++) {
+  const auto process_index = [&](const int64_t i) {
     std::tuple<TypedBuffer<typename ParamTags::base_type>...> written_values;
 
     (
@@ -350,6 +366,23 @@ inline void execute_chunked_hot_loop(const ElementFn &element_fn,
           }
         }(),
         ...);
+  };
+
+  if constexpr (UnrollLoops) {
+#if defined(__clang__)
+    _Pragma("clang loop unroll_count(4)")
+#elif defined(__GNUC__)
+    _Pragma("GCC unroll 4")
+#endif
+        for (int64_t i = 0; i < size; i++)
+    {
+      process_index(i);
+    }
+  }
+  else {
+    for (int64_t i = 0; i < size; i++) {
+      process_index(i);
+    }
   }
 
   /* Write split to args. */
@@ -365,6 +398,15 @@ inline void execute_chunked_hot_loop(const ElementFn &element_fn,
         }
       }(),
       ...);
+}
+
+template<ExecPresetC ExecPreset>
+consteval MaterializeCompilerAttributes get_materialize_compiler_attributes()
+{
+  if constexpr (requires { ExecPreset::materialize_attributes; }) {
+    return ExecPreset::materialize_attributes;
+  }
+  return {};
 }
 
 template<int64_t MaxChunkSize,
@@ -580,9 +622,6 @@ template<typename Arg> inline decltype(auto) execute_array_fetch(Arg &&arg, cons
 template<typename MaskT, typename... Args, typename ElementFn>
 /* Perform additional optimizations on this loop because it is a very hot loop. For example, the
  * math node in geometry nodes is processed here. */
-#if (defined(__GNUC__) && !defined(__clang__))
-[[gnu::optimize("-funroll-loops")]] [[gnu::optimize("O3")]]
-#endif
 inline void execute_array(const ElementFn &element_fn,
                           MaskT mask,
                           /* Use restrict to tell the compiler that pointer inputs do not alias
@@ -601,6 +640,28 @@ inline void execute_array(const ElementFn &element_fn,
     for (const int64_t i : mask) {
       element_fn(execute_array_fetch(args, i)...);
     }
+  }
+}
+
+/**
+ * Wraps the called function in a function which has a flatten attribute. `noinline` is used as
+ * well because otherwise the compiler may inline this function first, which looses the flatten
+ * attribute.
+ */
+template<typename Fn, typename... Args>
+[[gnu::flatten, gnu::noinline]] inline decltype(auto) compile_flattened(Fn &&fn, Args &&...args)
+{
+  return std::forward<Fn>(fn)(std::forward<Args>(args)...);
+}
+
+template<MaterializeCompilerAttributes Attrs, typename Fn, typename... Args>
+inline decltype(auto) compile_with_attributes(Fn &&fn, Args &&...args)
+{
+  if constexpr (Attrs.flatten) {
+    return compile_flattened(std::forward<Fn>(fn), std::forward<Args>(args)...);
+  }
+  else {
+    return std::forward<Fn>(fn)(std::forward<Args>(args)...);
   }
 }
 
@@ -682,12 +743,19 @@ inline void execute_element_fn_with_params(ElementFn &&element_fn,
         execute_chunked<MAX_CHUNK_SIZE>(
             TypeSequence<ParamTags...>(),
             std::index_sequence<I...>(),
-            [&]<typename... Args>(const int64_t size, Args *__restrict... args) {
-              execute_chunked_hot_loop<MAX_CHUNK_SIZE>(element_fn,
-                                                       TypeSequence<ParamTags...>(),
-                                                       std::index_sequence_for<ParamTags...>(),
-                                                       size,
-                                                       args...);
+            [&]<typename... Args>(const int64_t size, Args *__restrict... chunk_args) {
+              constexpr MaterializeCompilerAttributes compile_attrs =
+                  get_materialize_compiler_attributes<ExecPreset>();
+              compile_with_attributes<compile_attrs>(
+                  [&](Args *__restrict... inner_chunk_args) {
+                    execute_chunked_hot_loop<MAX_CHUNK_SIZE, compile_attrs.unroll>(
+                        element_fn,
+                        TypeSequence<ParamTags...>(),
+                        std::index_sequence_for<ParamTags...>(),
+                        size,
+                        inner_chunk_args...);
+                  },
+                  chunk_args...);
             },
             segment,
             loaded_params);
