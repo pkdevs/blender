@@ -427,7 +427,11 @@ struct OutlineList: View {
       .frame(width: 22)
       Group {
         if let image = BlenderIcon.image(node.string("icon"), themed: !selected) {
-          Image(uiImage: image).resizable().scaledToFit()
+          /* On the selection, in its white, whatever color the artwork has. */
+          Image(uiImage: image)
+            .renderingMode(selected ? .template : nil)
+            .resizable()
+            .scaledToFit()
         }
         else {
           Image(systemName: collection ? "folder" : "cube")
