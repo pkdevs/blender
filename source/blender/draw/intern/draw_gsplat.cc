@@ -164,16 +164,10 @@ void GSplatModule::begin_sync()
 
   compute_ellipses_ps_.init();
   compute_ellipses_ps_.state_set(DRW_STATE_NO_DRAW);
-  compute_ellipses_ps_.shader_set(DRW_shader_gsplat_compute_get(GSplatEvalShader::Ellipses));
-
   compute_radiance_ps_.init();
   compute_radiance_ps_.state_set(DRW_STATE_NO_DRAW);
-  compute_radiance_ps_.shader_set(DRW_shader_gsplat_compute_get(GSplatEvalShader::Radiance));
-
   compute_ellipses_radiance_ps_.init();
   compute_ellipses_radiance_ps_.state_set(DRW_STATE_NO_DRAW);
-  compute_ellipses_radiance_ps_.shader_set(
-      DRW_shader_gsplat_compute_get(GSplatEvalShader::EllipsesRadiance));
 }
 
 void GSplatModule::sync_object(const ObjectRef &ob_ref, const ResourceHandleRange &res_handle)
@@ -184,6 +178,14 @@ void GSplatModule::sync_object(const ObjectRef &ob_ref, const ResourceHandleRang
   ObjectKey ob_key = ob_ref.is_range() ? ObjectKey(ob_ref, 0) : ObjectKey(ob_ref);
   if (compute_objects_.contains(ob_key)) {
     return;
+  }
+  if (compute_objects_.is_empty()) {
+    /* First `sync_object` that adds a gsplat. Get shaders now, to avoid
+     * unnecessarily compiling in scenes without splats. */
+    compute_ellipses_ps_.shader_set(DRW_shader_gsplat_compute_get(GSplatEvalShader::Ellipses));
+    compute_radiance_ps_.shader_set(DRW_shader_gsplat_compute_get(GSplatEvalShader::Radiance));
+    compute_ellipses_radiance_ps_.shader_set(
+        DRW_shader_gsplat_compute_get(GSplatEvalShader::EllipsesRadiance));
   }
   compute_objects_.add(ob_key);
 
