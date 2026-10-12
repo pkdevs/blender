@@ -449,18 +449,21 @@ struct RenderGallery: View {
     ZStack {
       if id == RenderModel.live {
         if let live = model.live {
-          ZoomableImage(image: live)
+          ZoomableImage(image: live, url: nil)
         }
         else {
           ProgressView().controlSize(.large)
         }
       }
       else if let item = library.items.first(where: { $0.id == id }) {
+        let url = library.url(item)
         if item.video {
-          RenderVideo(url: library.url(item), playing: active)
+          RenderVideo(url: url, playing: active)
+            /* Held, the video file drags out to other apps. */
+            .onDrag { NSItemProvider(contentsOf: url) ?? NSItemProvider() }
         }
         else {
-          RenderStill(url: library.url(item))
+          RenderStill(url: url)
         }
       }
     }
@@ -512,7 +515,7 @@ struct RenderStill: View {
   var body: some View {
     ZStack {
       if let image {
-        ZoomableImage(image: image)
+        ZoomableImage(image: image, url: url)
           .transition(.opacity)
       }
     }
@@ -526,20 +529,25 @@ struct RenderStill: View {
 }
 
 /** An image to pinch, pan and double tap into, fitting the page when zoomed out, as in Photos.
- * Zoomed out it leaves sideways swipes to the gallery's paging. */
+ * Zoomed out it leaves sideways swipes to the gallery's paging. Held, it drags out to other apps:
+ * its file when it has one, otherwise the image. */
 struct ZoomableImage: UIViewRepresentable {
   let image: UIImage
+  let url: URL?
 
   func makeUIView(context: Context) -> ZoomView { ZoomView() }
 
   func updateUIView(_ view: ZoomView, context: Context) {
     if view.image !== image { view.image = image }
+    view.url = url
   }
 }
 
-final class ZoomView: UIScrollView, UIScrollViewDelegate {
+final class ZoomView: UIScrollView, UIScrollViewDelegate, UIDragInteractionDelegate {
   private let imageView = UIImageView()
   private var fitted = CGSize.zero
+  /** The image's file, which dragging hands to other apps as it is. */
+  var url: URL?
 
   var image: UIImage? {
     get { imageView.image }
@@ -569,6 +577,27 @@ final class ZoomView: UIScrollView, UIScrollViewDelegate {
     let doubleTap = UITapGestureRecognizer(target: self, action: #selector(doubleTapped(_:)))
     doubleTap.numberOfTapsRequired = 2
     addGestureRecognizer(doubleTap)
+    let drag = UIDragInteraction(delegate: self)
+    drag.isEnabled = true
+    addInteraction(drag)
+  }
+
+  func dragInteraction(_ interaction: UIDragInteraction,
+                       itemsForBeginning session: UIDragSession) -> [UIDragItem]
+  {
+    guard let image else { return [] }
+    let provider = url.flatMap { NSItemProvider(contentsOf: $0) } ?? NSItemProvider(object: image)
+    provider.suggestedName = url?.deletingPathExtension().lastPathComponent ?? "Render"
+    let item = UIDragItem(itemProvider: provider)
+    item.localObject = image
+    return [item]
+  }
+
+  func dragInteraction(_ interaction: UIDragInteraction, previewForLifting item: UIDragItem,
+                       session: UIDragSession) -> UITargetedDragPreview?
+  {
+    /* The image lifts, not the page around it. */
+    UITargetedDragPreview(view: imageView)
   }
 
   @available(*, unavailable)
