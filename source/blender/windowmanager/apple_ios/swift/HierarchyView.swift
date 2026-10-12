@@ -337,7 +337,7 @@ struct OutlineList: View {
     return AnyView(VStack(spacing: 2) {
       SwipeRow(id: key, swiped: $swiped, offset: $swipeOffset,
                leading: swipeActions(node, ["duplicate", "rename"]),
-               trailing: swipeActions(node, ["visibility", "delete"])) {
+               trailing: swipeActions(node, ["delete", "visibility"])) {
         row(node)
       }
       .zIndex(1)
@@ -552,8 +552,9 @@ struct SwipeAction {
   let run: () -> Void
 }
 
-/** A row that a sideways swipe pulls aside to show its actions, as a list's rows do. One row is
- * open at a time. */
+/** A row that a sideways swipe slides aside to uncover its actions, as a list's rows do: the
+ * actions widen with the swipe, and a long one stretches the outermost over the row and runs it
+ * on release. Actions are listed outermost first. One row is open at a time. */
 struct SwipeRow<Content: View>: View {
   let id: String
   @Binding var swiped: String?
@@ -562,44 +563,74 @@ struct SwipeRow<Content: View>: View {
   let trailing: [SwipeAction]
   @ViewBuilder let content: Content
   @State private var dragStart: CGFloat?
+  @State private var width: CGFloat = 0
 
-  private let buttonWidth: CGFloat = 104
+  private let buttonWidth: CGFloat = 64
+  private let settle = Animation.snappy(duration: 0.3)
 
   private var shown: CGFloat { swiped == id ? offset : 0 }
 
-  var body: some View {
-    ZStack {
-      HStack(spacing: 6) {
-        if shown > 0 { buttons(leading) }
-        Spacer(minLength: 0)
-        if shown < 0 { buttons(trailing) }
-      }
-      content
-        .offset(x: shown)
-    }
-    .clipped()
-    .simultaneousGesture(swipe)
+  private func actions(_ trailing: Bool) -> [SwipeAction] { trailing ? self.trailing : leading }
+
+  private func openWidth(_ actions: [SwipeAction]) -> CGFloat { CGFloat(actions.count) * buttonWidth }
+
+  /** How far a swipe goes before the outermost action takes the whole row. */
+  private func fullSwipe(_ actions: [SwipeAction]) -> CGFloat {
+    max(width * 0.6, openWidth(actions) + buttonWidth)
   }
 
-  private func buttons(_ actions: [SwipeAction]) -> some View {
-    ForEach(actions, id: \.title) { action in
-      Button {
-        withAnimation(.smooth(duration: 0.25)) {
-          swiped = nil
-          offset = 0
+  private var stretched: Bool { shown != 0 && abs(shown) > fullSwipe(actions(shown < 0)) }
+
+  var body: some View {
+    content
+      .offset(x: shown)
+      .background {
+        ZStack {
+          side(leading, revealed: max(shown, 0), trailing: false)
+          side(trailing, revealed: max(-shown, 0), trailing: true)
         }
-        action.run()
-      } label: {
-        Label(action.title, systemImage: action.symbol)
-          .font(.subheadline.weight(.medium))
-          .lineLimit(1)
-          .foregroundStyle(.white)
-          .frame(width: buttonWidth - 6, height: 36)
-          .background(action.tint, in: Capsule())
       }
-      .buttonStyle(.plain)
-      .transition(.opacity)
+      .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+      .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { width = $0 }
+      .simultaneousGesture(swipe)
+#if !os(visionOS)
+      .sensoryFeedback(.impact(weight: .medium), trigger: stretched) { _, now in now }
+#endif
+  }
+
+  /** One side's actions, sharing the width uncovered so far, outermost at the row's edge. */
+  private func side(_ actions: [SwipeAction], revealed: CGFloat, trailing: Bool) -> some View {
+    let full = revealed > fullSwipe(actions)
+    let ordered = Array(actions.enumerated())
+    return HStack(spacing: 0) {
+      ForEach(trailing ? ordered.reversed() : ordered, id: \.offset) { index, action in
+        let share = full ? (index == 0 ? revealed : 0) : revealed / CGFloat(actions.count)
+        Button { run(action) } label: {
+          Image(systemName: action.symbol)
+            .font(.body.weight(.semibold))
+            .foregroundStyle(.white)
+            .frame(width: buttonWidth)
+            /* The symbol keeps to the row's side, as the button stretches away from it. */
+            .frame(width: share, alignment: trailing ? .leading : .trailing)
+            .frame(maxHeight: .infinity)
+            .background(action.tint)
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(action.title)
+      }
     }
+    .animation(settle, value: full)
+    .frame(width: revealed)
+    .clipped()
+    .frame(maxWidth: .infinity, alignment: trailing ? .trailing : .leading)
+  }
+
+  private func run(_ action: SwipeAction) {
+    withAnimation(settle) {
+      swiped = nil
+      offset = 0
+    }
+    action.run()
   }
 
   private var swipe: some Gesture {
@@ -614,20 +645,30 @@ struct SwipeRow<Content: View>: View {
             offset = 0
           }
         }
-        let leadingLimit = leading.isEmpty ? 0 : CGFloat(leading.count) * buttonWidth + 20
-        let trailingLimit = trailing.isEmpty ? 0 : CGFloat(trailing.count) * buttonWidth + 20
-        offset = max(-trailingLimit, min(leadingLimit, (dragStart ?? 0) + value.translation.width))
+        let wanted = (dragStart ?? 0) + value.translation.width
+        /* A side without actions only gives a little, with resistance. */
+        if actions(wanted < 0).isEmpty {
+          offset = wanted / 8
+        }
+        else {
+          offset = max(-width, min(width, wanted))
+        }
       }
-      .onEnded { _ in
-        guard dragStart != nil else { return }
+      .onEnded { value in
+        guard let start = dragStart else { return }
         dragStart = nil
-        let target: CGFloat
-        if offset > buttonWidth / 2 { target = CGFloat(leading.count) * buttonWidth }
-        else if offset < -buttonWidth / 2 { target = -CGFloat(trailing.count) * buttonWidth }
-        else { target = 0 }
-        withAnimation(.smooth(duration: 0.25)) {
-          offset = target
-          if target == 0 { swiped = nil }
+        let trailing = offset < 0
+        let list = actions(trailing)
+        if let outermost = list.first, abs(offset) > fullSwipe(list) {
+          run(outermost)
+          return
+        }
+        /* A flick counts by where it was heading. */
+        let heading = start + value.predictedEndTranslation.width
+        let open = !list.isEmpty && (heading < 0) == trailing && abs(heading) > openWidth(list) / 2
+        withAnimation(settle) {
+          offset = open ? (trailing ? -openWidth(list) : openWidth(list)) : 0
+          if !open { swiped = nil }
         }
       }
   }
