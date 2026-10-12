@@ -128,6 +128,10 @@ static wmOperatorStatus multires_subdivide_exec(bContext *C, wmOperator *op)
     return OPERATOR_CANCELLED;
   }
 
+  const MultiresSubdivideModeType subdivide_mode = MultiresSubdivideModeType(
+      RNA_enum_get(op->ptr, "mode"));
+  multiresModifier_subdivide(object, mmd, subdivide_mode);
+
   Mesh *mesh = id_cast<Mesh *>(object->data);
   if (mesh->attributes().contains(".sculpt_mask") &&
       !CustomData_has_layer(&mesh->corner_data, CD_GRID_PAINT_MASK))
@@ -135,10 +139,6 @@ static wmOperatorStatus multires_subdivide_exec(bContext *C, wmOperator *op)
     BKE_sculpt_mask_layers_ensure(
         CTX_data_ensure_evaluated_depsgraph(C), CTX_data_main(C), object, mmd);
   }
-
-  const MultiresSubdivideModeType subdivide_mode = MultiresSubdivideModeType(
-      RNA_enum_get(op->ptr, "mode"));
-  multiresModifier_subdivide(object, mmd, subdivide_mode);
 
   iter_other(CTX_data_main(C), object, true, multires_update_totlevels, &mmd->totlvl);
 
