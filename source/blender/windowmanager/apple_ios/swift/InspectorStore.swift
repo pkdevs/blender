@@ -142,7 +142,6 @@ final class InspectorStore {
   @ObservationIgnored private var snapshot: JSON?
   @ObservationIgnored private var shownTab: String?
   @ObservationIgnored private var inspector: JSON?
-  @ObservationIgnored private var schema: NSArray?
   @ObservationIgnored private(set) var sequence: UInt64 = 0
   private static var nextSequence: UInt64 = 0
 

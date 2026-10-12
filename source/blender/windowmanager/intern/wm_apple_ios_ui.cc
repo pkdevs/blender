@@ -160,9 +160,6 @@ struct IOSOperatorPropertyCommand {
 
 struct IOSOperatorCommand {
   std::string op_name;
-  bool has_position = false;
-  int x = 0, y = 0;
-  int retries = 0;
 };
 
 struct IOSSettingCommand {
@@ -2170,14 +2167,6 @@ extern "C" void WM_apple_ios_ui_operator_enqueue(const char *op_name)
   ios_ui_messages.push(IOSOperatorCommand{op_name});
 }
 
-extern "C" void WM_apple_ios_ui_operator_at_position_enqueue(const char *op_name, int x, int y)
-{
-  if (op_name == nullptr || op_name[0] == '\0') {
-    return;
-  }
-  ios_ui_messages.push(IOSOperatorCommand{op_name, true, x, y});
-}
-
 extern "C" void WM_apple_ios_ui_operator_enum_enqueue(const char *op_name,
                                                       const char *prop_name,
                                                       const char *prop_value)
@@ -2571,27 +2560,7 @@ static void ios_ui_dispatch_operator(bContext *C, IOSOperatorCommand &command)
 {
   const IOSContextStore context_store = ios_context_push_view3d(C);
   wmWindow *win = CTX_wm_window(C);
-  bool ready = win && CTX_wm_area(C) && CTX_wm_region(C);
-  if (ready && command.has_position) {
-    for (wmEventHandler &handler_item : win->runtime->modalhandlers) {
-      wmEventHandler *handler = &handler_item;
-      if (handler->type == WM_HANDLER_TYPE_OP) {
-        ready = false;
-        break;
-      }
-    }
-    if (!ready && command.retries++ < 2) {
-      /* Allow the queued Pencil cancellation/release to reach the modal handler. */
-      ios_ui_messages.push(command);
-    }
-    if (ready && win->runtime->eventstate) {
-      int x = command.x, y = command.y;
-      wm_cursor_position_from_ghost_client_coords(win, &x, &y);
-      win->runtime->eventstate->xy[0] = x;
-      win->runtime->eventstate->xy[1] = y;
-    }
-  }
-  if (ready) {
+  if (win && CTX_wm_area(C) && CTX_wm_region(C)) {
     ios_operator_invoke(C, command.op_name.c_str());
   }
   ios_context_pop(C, context_store);

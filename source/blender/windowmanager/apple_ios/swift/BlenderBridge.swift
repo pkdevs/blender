@@ -136,15 +136,6 @@ func animationStateColor(_ state: String?) -> Color? {
   }
 }
 
-func animationStateDescription(_ state: String?) -> String? {
-  switch state {
-    case "KEYED": return "Keyframed"
-    case "ANIMATED", "CHANGED": return "Animated"
-    case "DRIVEN": return "Driven"
-    default: return nil
-  }
-}
-
 /** Axis captions in Blender's axis colors. */
 func axisColor(_ label: String?) -> Color {
   switch label {

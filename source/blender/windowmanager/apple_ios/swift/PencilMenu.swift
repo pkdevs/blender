@@ -87,7 +87,6 @@ final class PencilMenuModel: ObservableObject {
   @Published var visible = false
   /** Bumped per page, so a new page's pills grow out of the center. */
   @Published var page = 0
-  var appearFrom = CGPoint.zero
 }
 
 struct PencilMenuContent: View {

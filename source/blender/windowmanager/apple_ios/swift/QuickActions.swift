@@ -17,8 +17,7 @@ import UIKit
 
 /** Sizes shared by the window's controls. */
 enum ShellMetrics {
-  /** The tool rail's width and its distance from the leading edge. */
-  static let railWidth: CGFloat = 64
+  /** The tool rail's distance from the leading edge. */
   static let railLeading: CGFloat = 14
   /** The navigation gizmo's corner, which the row stays clear of until Blender places it. */
   static let gizmoReserve: CGFloat = 124
