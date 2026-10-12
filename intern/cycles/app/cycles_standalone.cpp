@@ -37,6 +37,23 @@
 
 CCL_NAMESPACE_BEGIN
 
+struct RestirOptions {
+  int use_restir = -1;
+  int use_initial_resampling = -1;
+  int use_spatial_resampling = -1;
+  int use_temporal = -1;
+  int restir_unbiased = -1;
+
+  int restir_light_samples = -1;
+  int restir_spatial_radius = -1;
+  int restir_spatial_neighbors = -1;
+  int restir_spatial_iterations = -1;
+  int restir_temporal_frame_count = -1;
+
+  float restir_temporal_normal_threshold = -1.0f;
+  float restir_temporal_depth_threshold = -1.0f;
+};
+
 struct Options {
   unique_ptr<Session> session;
   Scene *scene;
@@ -44,6 +61,7 @@ struct Options {
   int width, height;
   SceneParams scene_params;
   SessionParams session_params;
+  RestirOptions restir;
   bool quiet;
   bool show_help, interactive, pause;
   string output_filepath;
@@ -126,6 +144,54 @@ static void scene_init()
   options.scene->camera->compute_auto_viewplane();
 }
 
+// !!!(Tri): Verify; Apply CLI overrides after loading the scene.
+static void scene_apply_options()
+{
+  Integrator *integrator = options.scene->integrator;
+  const RestirOptions &restir = options.restir;
+
+  if (restir.use_restir >= 0) {
+    integrator->set_use_restir(restir.use_restir != 0);
+  }
+  if (restir.use_initial_resampling >= 0) {
+    integrator->set_use_initial_resampling(restir.use_initial_resampling != 0);
+  }
+  if (restir.use_spatial_resampling >= 0) {
+    integrator->set_use_spatial_resampling(restir.use_spatial_resampling != 0);
+  }
+  if (restir.use_temporal >= 0) {
+    integrator->set_use_temporal(restir.use_temporal != 0);
+  }
+  if (restir.restir_unbiased >= 0) {
+    integrator->set_restir_unbiased(restir.restir_unbiased != 0);
+  }
+
+  if (restir.restir_light_samples >= 0) {
+    integrator->set_restir_light_samples(restir.restir_light_samples);
+  }
+  if (restir.restir_spatial_radius >= 0) {
+    integrator->set_restir_spatial_radius(restir.restir_spatial_radius);
+  }
+  if (restir.restir_spatial_neighbors >= 0) {
+    integrator->set_restir_spatial_neighbors(restir.restir_spatial_neighbors);
+  }
+  if (restir.restir_spatial_iterations >= 0) {
+    integrator->set_restir_spatial_iterations(restir.restir_spatial_iterations);
+  }
+  if (restir.restir_temporal_frame_count >= 0) {
+    integrator->set_restir_temporal_frame_count(restir.restir_temporal_frame_count);
+  }
+
+  if (restir.restir_temporal_normal_threshold >= 0.0f) {
+    integrator->set_restir_temporal_normal_threshold(
+        restir.restir_temporal_normal_threshold);
+  }
+  if (restir.restir_temporal_depth_threshold >= 0.0f) {
+    integrator->set_restir_temporal_depth_threshold(
+        restir.restir_temporal_depth_threshold);
+  }
+}
+
 static void session_init()
 {
   options.output_pass = "combined";
@@ -154,6 +220,7 @@ static void session_init()
 
   /* load scene */
   scene_init();
+  scene_apply_options();
 
   /* add pass for output. */
   Pass *pass = options.scene->create_node<Pass>();
@@ -367,6 +434,12 @@ static void parse_int(OIIO::cspan<const char *> argv, int *i)
   *i = atoi(argv[1]);
 }
 
+static void parse_float(OIIO::cspan<const char *> argv, float *f)
+{
+  assert(argv.size() == 2);
+  *f = (float)atof(argv[1]);
+}
+
 static void parse_string(OIIO::cspan<const char *> argv, std::string *s)
 {
   assert(argv.size() == 2);
@@ -424,6 +497,48 @@ static void options_parse(const int argc, const char **argv)
   ap.arg("--samples %d:SAMPLES").help("Number of samples to render").action([&](auto argv) {
     parse_int(argv, &options.session_params.samples);
   });
+  /* ResTIR. */
+  ap.arg("--restir %d:BOOL").help("Enable ReSTIR - Spatiotemporal reservoir resampling").action([&](auto argv) {
+    parse_int(argv, &options.restir.use_restir);
+  });
+  ap.arg("--restir-initial %d:BOOL").help("Enable initial resampling").action([&](auto argv) {
+    parse_int(argv, &options.restir.use_initial_resampling);
+  });
+  ap.arg("--restir-spatial %d:BOOL").help("Enable spatial resampling").action([&](auto argv) {
+    parse_int(argv, &options.restir.use_spatial_resampling);
+  });
+  ap.arg("--restir-temporal %d:BOOL").help("Enable temporal resampling").action([&](auto argv) {
+    parse_int(argv, &options.restir.use_temporal);
+  });
+  ap.arg("--restir-unbiased %d:BOOL").help("Enable unbiased ReSTIR").action([&](auto argv) {
+    parse_int(argv, &options.restir.restir_unbiased);
+  });
+
+  ap.arg("--restir-light-samples %d:COUNT").help("Number of initial light candidates").action([&](auto argv) {
+    parse_int(argv, &options.restir.restir_light_samples);
+  });
+  ap.arg("--restir-spatial-radius %d:PIXELS").help("Spatial resampling radius").action([&](auto argv) {
+    parse_int(argv, &options.restir.restir_spatial_radius);
+  });
+  ap.arg("--restir-spatial-neighbors %d:COUNT").help("Number of spatial neighbors").action([&](auto argv) {
+    parse_int(argv, &options.restir.restir_spatial_neighbors);
+  });
+  ap.arg("--restir-spatial-iterations %d:COUNT").help("Number of spatial resampling iterations").action([&](auto argv) {
+    parse_int(argv, &options.restir.restir_spatial_iterations);
+  });
+  ap.arg("--restir-temporal-frames %d:COUNT").help("Temporal reservoir history limit (frames)").action([&](auto argv) {
+    parse_int(argv, &options.restir.restir_temporal_frame_count);
+  });
+
+  ap.arg("--restir-temporal-normal-threshold %f:VALUE").help("Temporal normal cosine threshold").action([&](auto argv) {
+    parse_float(argv, &options.restir.restir_temporal_normal_threshold);
+  });
+  ap.arg("--restir-temporal-depth-threshold %f:VALUE").help("Temporal relative depth threshold").action([&](auto argv) {
+    parse_float(argv, &options.restir.restir_temporal_depth_threshold);
+  });
+  // TODO(Tri): Add options for adaptive-sampling, light-tree, caustics, & output color management...
+
+  /* Output. */
   ap.arg("--output %s:OUTPUT").help("File path to write output image").action([&](auto argv) {
     parse_string(argv, &options.output_filepath);
   });
@@ -450,6 +565,34 @@ static void options_parse(const int argc, const char **argv)
   if (ap.parse_args(argc, argv) < 0) {
     fprintf(stderr, "%s\n", ap.geterror().c_str());
     ap.print_help();
+    exit(EXIT_FAILURE);
+  }
+
+  const RestirOptions &restir = options.restir;
+
+  const int boolean_options[] = {
+      restir.use_restir,
+      restir.use_initial_resampling,
+      restir.use_spatial_resampling,
+      restir.use_temporal,
+      restir.restir_unbiased,
+  };
+
+  for (const int value : boolean_options) {
+    if (value < -1 || value > 1) {
+      fprintf(stderr, "ReSTIR boolean options must be 0 or 1\n");
+      exit(EXIT_FAILURE);
+    }
+  }
+
+  if (restir.restir_light_samples < -1 ||
+      restir.restir_spatial_radius < -1 ||
+      restir.restir_spatial_neighbors < -1 ||
+      restir.restir_spatial_iterations < -1 ||
+      restir.restir_temporal_frame_count < -1 ||
+      restir.restir_temporal_normal_threshold < -1.0f ||
+      restir.restir_temporal_depth_threshold < -1.0f) {
+    fprintf(stderr, "ReSTIR numeric options must be non-negative\n");
     exit(EXIT_FAILURE);
   }
 
