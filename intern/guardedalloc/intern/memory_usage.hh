@@ -11,36 +11,29 @@
  */
 
 #include <atomic>
-#include <cassert>
 #include <cstddef>
 #include <cstdint>
-#include <memory>
 
 namespace mem_guarded::internal::memory_usage {
 
-struct Global;
+enum class LocalState {
+  Unregistered, /** Thread has not registered #Local yet. */
+  Registered,   /** Local counters can be used. */
+  Exited,       /** Thread is exiting, need to use global counters. */
+};
 
 /**
  * This is stored per thread. Align to cache line size to avoid false sharing.
+ *
+ * Constant initialized and trivially destructible, to avoid the compiler generating
+ * expensive initialization check on every access.
  */
 struct alignas(128) Local {
-  /**
-   * Retain shared ownership of #Global to make sure that it is not destructed.
-   */
-  std::shared_ptr<Global> global;
-
-  /** Helps to find bugs during program shutdown. */
-  bool destructed = false;
-  /**
-   * This is the first created #Local and on the main thread. When the main local data is
-   * destructed, we know that Blender is quitting and that we can't rely on thread locals being
-   * available still.
-   */
-  bool is_main = false;
+  LocalState state = LocalState::Unregistered;
   /**
    * Number of bytes. This can be negative when e.g. one thread allocates a lot of memory, and
-   * another frees it. It has to be an atomic, because it may be accessed by other threads when the
-   * total memory usage is counted.
+   * another frees it. It has to be an atomic, because it may be read by other threads when the
+   * total memory usage is counted. Only the owning thread writes it.
    */
   std::atomic<int64_t> mem_in_use = 0;
   /**
@@ -54,10 +47,9 @@ struct alignas(128) Local {
    * accurate, but it's still good enough for practical purposes.
    */
   std::atomic<int64_t> mem_in_use_during_peak_update = 0;
-
-  Local();
-  ~Local();
 };
+
+extern constinit thread_local Local local_data;
 
 /**
  * This is true for most of the lifetime of the program. Only when it starts exiting this becomes
@@ -74,9 +66,19 @@ inline constexpr int64_t peak_update_threshold = 1024 * 1024;
 
 inline Local &get_local_data()
 {
-  static thread_local Local local;
-  assert(!local.destructed);
-  return local;
+  return local_data;
+}
+
+/**
+ * Add to atomic counter only written by the owning thread and read by other threads. This means we
+ * can use cheaper separate load and store instructions rather than requiring them to be done in
+ * one atomic operation.
+ */
+inline int64_t local_counter_add(std::atomic<int64_t> &counter, const int64_t value)
+{
+  const int64_t new_value = counter.load(std::memory_order_relaxed) + value;
+  counter.store(new_value, std::memory_order_relaxed);
+  return new_value;
 }
 
 /** Check if the current memory usage is higher than the peak and update it if yes. */
@@ -91,17 +93,19 @@ void block_free_slow(size_t size);
 inline void memory_usage_block_alloc(const size_t size)
 {
   using namespace mem_guarded::internal::memory_usage;
-  if (use_local_counters.load(std::memory_order_relaxed)) [[likely]] {
-    Local &local = get_local_data();
+  Local &local = get_local_data();
+  if (local.state == LocalState::Registered) [[likely]] {
     /* Increase local memory counts. This does not cause thread synchronization in the majority of
      * cases, because each thread has these counters on a separate cache line. It may only cause
      * synchronization if another thread is computing the total current memory usage at the same
      * time, which is very rare compared to doing allocations. */
-    local.blocks_num.fetch_add(1, std::memory_order_relaxed);
-    local.mem_in_use.fetch_add(int64_t(size), std::memory_order_relaxed);
+    local_counter_add(local.blocks_num, 1);
+    const int64_t mem_in_use = local_counter_add(local.mem_in_use, int64_t(size));
 
     /* If a certain amount of new memory has been allocated, update the peak. */
-    if (local.mem_in_use - local.mem_in_use_during_peak_update > peak_update_threshold) {
+    if (mem_in_use - local.mem_in_use_during_peak_update.load(std::memory_order_relaxed) >
+        peak_update_threshold)
+    {
       update_global_peak();
     }
   }
@@ -113,12 +117,12 @@ inline void memory_usage_block_alloc(const size_t size)
 inline void memory_usage_block_free(const size_t size)
 {
   using namespace mem_guarded::internal::memory_usage;
-  if (use_local_counters) [[likely]] {
+  Local &local = get_local_data();
+  if (local.state == LocalState::Registered) [[likely]] {
     /* Decrease local memory counts. See comment in #memory_usage_block_alloc for details regarding
      * thread synchronization. */
-    Local &local = get_local_data();
-    local.mem_in_use.fetch_sub(int64_t(size), std::memory_order_relaxed);
-    local.blocks_num.fetch_sub(1, std::memory_order_relaxed);
+    local_counter_add(local.mem_in_use, -int64_t(size));
+    local_counter_add(local.blocks_num, -1);
   }
   else {
     block_free_slow(size);

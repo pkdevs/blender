@@ -14,9 +14,33 @@
 #include "mallocn_intern.hh"
 #include "memory_usage.hh"
 
+#include "../../source/blender/blenlib/BLI_compiler_compat.hh"
+
 #include "../../source/blender/blenlib/BLI_strict_flags.hh"
 
 namespace mem_guarded::internal::memory_usage {
+
+struct Global;
+
+/**
+ * Registers the #Local of the thread with #Global on construction, and unregisters it when the
+ * thread exits. Separate from #Local so that #Local can be trivial for better performance.
+ */
+struct LocalRegistration {
+  /**
+   * Retain shared ownership of #Global to make sure that it is not destructed.
+   */
+  std::shared_ptr<Global> global;
+  /**
+   * This is the first created #Local and on the main thread. When the main local data is
+   * destructed, we know that Blender is quitting and that we can't rely on thread locals being
+   * available still.
+   */
+  bool is_main = false;
+
+  LocalRegistration();
+  ~LocalRegistration();
+};
 
 /**
  * This is a singleton that stores global data. It's owned by a `std::shared_ptr` which is owned by
@@ -28,7 +52,7 @@ struct Global {
    */
   std::mutex locals_mutex;
   /**
-   * All currently constructed #Local. This must only be accessed when the mutex above is
+   * All currently registered #Local. This must only be accessed when the mutex above is
    * locked. Individual threads insert and remove themselves here.
    */
   std::vector<Local *> locals;
@@ -41,7 +65,7 @@ struct Global {
    *
    * To solve this, the memory counts are added to these global counters when the thread
    * exists. The global counters are also used when the entire process starts to exit, because the
-   * #Local data of the main thread is already destructed when the leak detection happens (during
+   * #Local data of the main thread is already unregistered when the leak detection happens (during
    * destruction of static variables which happens after destruction of thread-locals).
    */
   std::atomic<int64_t> mem_in_use_outside_locals = 0;
@@ -55,6 +79,7 @@ struct Global {
   std::atomic<size_t> peak = 0;
 };
 
+constinit thread_local Local local_data;
 std::atomic<bool> use_local_counters = true;
 
 }  // namespace mem_guarded::internal::memory_usage
@@ -72,38 +97,53 @@ static Global &get_global()
   return *get_global_ptr();
 }
 
-Local::Local()
+LocalRegistration::LocalRegistration()
 {
   this->global = get_global_ptr();
+  Local &local = get_local_data();
 
   std::lock_guard lock{this->global->locals_mutex};
   if (this->global->locals.empty()) {
-    /* This is the first thread creating #Local, it is therefore the main thread because it's
-     * created through #memory_usage_init. */
+    /* This is the first thread registering #Local, it is therefore the main thread because it's
+     * registered through #memory_usage_init. */
     this->is_main = true;
   }
-  /* Register self in the global list. */
-  this->global->locals.push_back(this);
+  /* Register in the global list. */
+  this->global->locals.push_back(&local);
+  local.state = LocalState::Registered;
 }
 
-Local::~Local()
+LocalRegistration::~LocalRegistration()
 {
+  Local &local = get_local_data();
+
   std::lock_guard lock{this->global->locals_mutex};
 
-  /* Unregister self from the global list. */
+  /* Unregister from the global list. */
   this->global->locals.erase(
-      std::find(this->global->locals.begin(), this->global->locals.end(), this));
+      std::find(this->global->locals.begin(), this->global->locals.end(), &local));
   /* Don't forget the memory counts stored locally. */
-  this->global->blocks_num_outside_locals.fetch_add(this->blocks_num, std::memory_order_relaxed);
-  this->global->mem_in_use_outside_locals.fetch_add(this->mem_in_use, std::memory_order_relaxed);
+  this->global->blocks_num_outside_locals.fetch_add(local.blocks_num, std::memory_order_relaxed);
+  this->global->mem_in_use_outside_locals.fetch_add(local.mem_in_use, std::memory_order_relaxed);
 
   if (this->is_main) {
     /* The main thread started shutting down. Use global counters from now on to avoid accessing
      * thread-locals after they have been destructed. */
     use_local_counters.store(false, std::memory_order_relaxed);
   }
-  /* Helps to detect when thread locals are accidentally accessed after destruction. */
-  this->destructed = true;
+  /* Use global counters for the rest of the thread exit. */
+  local.state = LocalState::Exited;
+}
+
+static bool register_local_data()
+{
+  Local &local = get_local_data();
+  if (local.state == LocalState::Unregistered &&
+      use_local_counters.load(std::memory_order_relaxed))
+  {
+    static thread_local LocalRegistration registration;
+  }
+  return local.state == LocalState::Registered;
 }
 
 void mem_guarded::internal::memory_usage::update_global_peak()
@@ -115,7 +155,7 @@ void mem_guarded::internal::memory_usage::update_global_peak()
   std::lock_guard lock{global.locals_mutex};
 
   for (Local *local : global.locals) {
-    assert(!local->destructed);
+    assert(local->state == LocalState::Registered);
     /* Updating this makes sure that the peak is not updated too often, which would degrade
      * performance. */
     local->mem_in_use_during_peak_update = local->mem_in_use.load(std::memory_order_relaxed);
@@ -125,23 +165,33 @@ void mem_guarded::internal::memory_usage::update_global_peak()
 void memory_usage_init()
 {
   /* Makes sure that the static and thread-local variables on the main thread are initialized. */
-  get_local_data();
+  register_local_data();
 }
 
 void mem_guarded::internal::memory_usage::block_alloc_slow(const size_t size)
 {
-  Global &global = get_global();
-  /* Increase global memory counts. */
-  global.blocks_num_outside_locals.fetch_add(1, std::memory_order_relaxed);
-  global.mem_in_use_outside_locals.fetch_add(int64_t(size), std::memory_order_relaxed);
+  if (register_local_data()) {
+    memory_usage_block_alloc(size);
+  }
+  else {
+    Global &global = get_global();
+    /* Increase global memory counts. */
+    global.blocks_num_outside_locals.fetch_add(1, std::memory_order_relaxed);
+    global.mem_in_use_outside_locals.fetch_add(int64_t(size), std::memory_order_relaxed);
+  }
 }
 
 void mem_guarded::internal::memory_usage::block_free_slow(const size_t size)
 {
-  Global &global = get_global();
-  /* Decrease global memory counts. */
-  global.blocks_num_outside_locals.fetch_sub(1, std::memory_order_relaxed);
-  global.mem_in_use_outside_locals.fetch_sub(int64_t(size), std::memory_order_relaxed);
+  if (register_local_data()) {
+    memory_usage_block_free(size);
+  }
+  else {
+    Global &global = get_global();
+    /* Decrease global memory counts. */
+    global.blocks_num_outside_locals.fetch_sub(1, std::memory_order_relaxed);
+    global.mem_in_use_outside_locals.fetch_sub(int64_t(size), std::memory_order_relaxed);
+  }
 }
 
 size_t memory_usage_block_num()
