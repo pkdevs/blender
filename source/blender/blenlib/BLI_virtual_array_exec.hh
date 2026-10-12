@@ -172,30 +172,29 @@ template<typename ParamTag> struct MaterializeArgInfo {
   const typename ParamTag::base_type *internal_span_data;
 };
 
-template<typename... ParamTags, typename ElementFn, typename... Chunks>
+template<typename ElementFn, typename... Args>
 #if (defined(__GNUC__) && !defined(__clang__))
 [[gnu::optimize("-funroll-loops")]] [[gnu::optimize("O3")]]
 #endif
-inline void execute_materialized_hot_loop(TypeSequence<ParamTags...> /*param_tags*/,
-                                          const ElementFn &element_fn,
-                                          const int64_t size,
-                                          Chunks *__restrict... chunks)
+inline void execute_chunked_hot_loop(const ElementFn &element_fn,
+                                     const int64_t size,
+                                     Args *__restrict... args)
 {
   for (int64_t i = 0; i < size; i++) {
-    element_fn(chunks[i]...);
+    element_fn(args[i]...);
   }
 }
 
 template<int64_t ChunkSize,
          ParamTagC... ParamTags,
          size_t... I,
-         typename ElementFn,
+         typename ChunkFn,
          typename... Params>
-inline void execute_materialized(TypeSequence<ParamTags...> /*param_tags*/,
-                                 std::index_sequence<I...> /*indices*/,
-                                 ElementFn &&element_fn,
-                                 const IndexMaskSegment mask,
-                                 const std::tuple<Params...> &params)
+inline void execute_chunked(TypeSequence<ParamTags...> /*param_tags*/,
+                            std::index_sequence<I...> /*indices*/,
+                            ChunkFn &&chunk_fn,
+                            const IndexMaskSegment mask,
+                            const std::tuple<Params...> &params)
 {
   const int64_t mask_size = mask.size();
   const int64_t tmp_buffer_size = std::min(mask_size, ChunkSize);
@@ -267,54 +266,54 @@ inline void execute_materialized(TypeSequence<ParamTags...> /*param_tags*/,
 
     const IndexMask *current_segment_mask = nullptr;
 
-    execute_materialized_hot_loop(
-        TypeSequence<ParamTags...>(),
-        element_fn,
-        chunk_size,
-        /* Prepare every parameter for this chunk. */
-        [&] {
-          using ParamTag = ParamTags;
-          using T = typename ParamTag::base_type;
-          [[maybe_unused]] MaterializeArgInfo<ParamTags> &arg_info = std::get<I>(args_info);
-          T *tmp_buffer = std::get<I>(temporary_buffers);
-          if constexpr (ParamTag::category == ParamCategory::Input) {
-            if (arg_info.mode == MaterializeArgMode::Single) {
-              /* The single value has been filled into a buffer already reused for every chunk. */
-              return const_cast<const T *>(tmp_buffer);
-            }
-            if (sliced_mask_is_range && arg_info.internal_span_data != nullptr) {
-              /* In this case we can just use an existing span instead of "compressing" it into
-               * a new temporary buffer. */
-              arg_info.mode = MaterializeArgMode::Span;
-              return arg_info.internal_span_data + mask_start;
-            }
-            const auto &varray_impl = *std::get<I>(params);
-            if (current_segment_mask == nullptr) {
-              current_segment_mask = &index_mask_from_segment.update(
-                  {segment_offset, sliced_mask.base_span()});
-            }
-            /* As a fallback, do a virtual function call to retrieve all elements in the current
-             * chunk. The elements are stored in a temporary buffer reused for every chunk. */
-            varray_impl.materialize_compressed(*current_segment_mask, tmp_buffer, true);
-            /* Remember that this parameter has been materialized, so that the values are
-             * destructed properly when the chunk is done. */
-            arg_info.mode = MaterializeArgMode::Materialized;
-            return const_cast<const T *>(tmp_buffer);
-          }
-          else if constexpr (ELEM(ParamTag::category,
-                                  ParamCategory::Output,
-                                  ParamCategory::Mutable)) {
-            /* For outputs, just pass a pointer. This is important so that `__restrict` works. */
-            if (sliced_mask_is_range) {
-              /* Can write into the caller-provided buffer directly. */
-              T *param_buffer = std::get<I>(params);
-              return param_buffer + mask_start;
-            }
-            /* Use the temporary buffer. The values will have to be copied out of that
-             * buffer into the caller-provided buffer afterwards. */
-            return tmp_buffer;
-          }
-        }()...);
+    chunk_fn(chunk_size,
+             /* Prepare every parameter for this chunk. */
+             [&] {
+               using ParamTag = ParamTags;
+               using T = typename ParamTag::base_type;
+               [[maybe_unused]] MaterializeArgInfo<ParamTags> &arg_info = std::get<I>(args_info);
+               T *tmp_buffer = std::get<I>(temporary_buffers);
+               if constexpr (ParamTag::category == ParamCategory::Input) {
+                 if (arg_info.mode == MaterializeArgMode::Single) {
+                   /* The single value has been filled into a buffer already reused for every
+                    * chunk. */
+                   return const_cast<const T *>(tmp_buffer);
+                 }
+                 if (sliced_mask_is_range && arg_info.internal_span_data != nullptr) {
+                   /* In this case we can just use an existing span instead of "compressing" it
+                    * into a new temporary buffer. */
+                   arg_info.mode = MaterializeArgMode::Span;
+                   return arg_info.internal_span_data + mask_start;
+                 }
+                 const auto &varray_impl = *std::get<I>(params);
+                 if (current_segment_mask == nullptr) {
+                   current_segment_mask = &index_mask_from_segment.update(
+                       {segment_offset, sliced_mask.base_span()});
+                 }
+                 /* As a fallback, do a virtual function call to retrieve all elements in the
+                  * current chunk. The elements are stored in a temporary buffer reused for every
+                  * chunk. */
+                 varray_impl.materialize_compressed(*current_segment_mask, tmp_buffer, true);
+                 /* Remember that this parameter has been materialized, so that the values are
+                  * destructed properly when the chunk is done. */
+                 arg_info.mode = MaterializeArgMode::Materialized;
+                 return const_cast<const T *>(tmp_buffer);
+               }
+               else if constexpr (ELEM(ParamTag::category,
+                                       ParamCategory::Output,
+                                       ParamCategory::Mutable)) {
+                 /* For outputs, just pass a pointer. This is important so that `__restrict` works.
+                  */
+                 if (sliced_mask_is_range) {
+                   /* Can write into the caller-provided buffer directly. */
+                   T *param_buffer = std::get<I>(params);
+                   return param_buffer + mask_start;
+                 }
+                 /* Use the temporary buffer. The values will have to be copied out of that
+                  * buffer into the caller-provided buffer afterwards. */
+                 return tmp_buffer;
+               }
+             }()...);
 
     /* Relocate outputs from temporary buffers to buffers provided by caller. */
     if (!sliced_mask_is_range) {
@@ -497,11 +496,14 @@ inline void execute_element_fn_with_params(ElementFn &&element_fn,
      * still instantiates the function only once. */
     if constexpr (ExecPreset::fallback_mode == varray_exec::FallbackMode::Materialized) {
       mask.foreach_segment([&](const IndexMaskSegment segment) {
-        execute_materialized<64>(TypeSequence<ParamTags...>(),
-                                 std::index_sequence<I...>(),
-                                 element_fn,
-                                 segment,
-                                 loaded_params);
+        execute_chunked<64>(
+            TypeSequence<ParamTags...>(),
+            std::index_sequence<I...>(),
+            [&]<typename... Args>(const int64_t size, Args *__restrict... args) {
+              execute_chunked_hot_loop(element_fn, size, args...);
+            },
+            segment,
+            loaded_params);
       });
     }
     else {
