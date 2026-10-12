@@ -296,7 +296,16 @@ public struct DocumentWindow: View {
   private var controlsShown: Bool { !model.desktop && !model.interfaceHidden }
 
   public var body: some View {
-    editor
+    ZStack(alignment: .top) {
+      editor
+#if !os(visionOS) /* Windows of their own there. */
+      /* Outside the editor's navigation view, so their own navigation bars stay their own. */
+      if controlsShown {
+        SidePanelsLayer(model: model, panels: shell.panels)
+          .padding(.top, max(0, model.toolbarBottom - model.safeAreaInsets.top))
+      }
+#endif
+    }
   }
 
   /** The viewport with its controls and the toolbar. */
@@ -320,13 +329,11 @@ public struct DocumentWindow: View {
    * toolbar. */
   private var layers: some View {
     ZStack {
+      Color.clear
+        .ignoresSafeArea()
+        .onGeometryChange(for: CGFloat.self) { $0.safeAreaInsets.top } action: { model.toolbarBottom = $0 }
       viewportLayers
         .ignoresSafeArea()
-#if !os(visionOS) /* Windows of their own there. */
-      if controlsShown {
-        SidePanelsLayer(model: model, panels: shell.panels)
-      }
-#endif
       CompileIndicator(progress: shell.compile)
     }
   }
