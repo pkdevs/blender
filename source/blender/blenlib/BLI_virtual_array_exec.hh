@@ -139,6 +139,8 @@ concept ParamTagC = requires {
   { T::category } -> std::convertible_to<ParamCategory>;
 };
 
+namespace detail {
+
 enum class BatchArgMode {
   Unknown,
   Single,
@@ -466,11 +468,11 @@ inline void execute_element_fn_with_params(ElementFn &&element_fn,
      * still instantiates the function only once. */
     if constexpr (ExecPreset::fallback_mode == varray_exec::FallbackMode::Materialized) {
       mask.foreach_segment([&](const IndexMaskSegment segment) {
-        varray_exec::batch_process<64>(TypeSequence<ParamTags...>(),
-                                       std::index_sequence<I...>(),
-                                       element_fn,
-                                       segment,
-                                       loaded_params);
+        batch_process<64>(TypeSequence<ParamTags...>(),
+                          std::index_sequence<I...>(),
+                          element_fn,
+                          segment,
+                          loaded_params);
       });
     }
     else {
@@ -503,19 +505,21 @@ inline void execute_element_fn_with_params(ElementFn &&element_fn,
   }
 }
 
+}  // namespace detail
+
 template<typename ElementFn, ExecPresetC ExecPreset, typename... ParamTags, typename... Params>
-inline void execute_element_fn_with_params(ElementFn &&element_fn,
-                                           const ExecPreset &exec_preset,
-                                           const IndexMask &mask,
-                                           TypeSequence<ParamTags...> param_tags,
-                                           Params &&...params)
+inline void execute(ElementFn &&element_fn,
+                    const ExecPreset &exec_preset,
+                    const IndexMask &mask,
+                    TypeSequence<ParamTags...> param_tags,
+                    Params &&...params)
 {
-  execute_element_fn_with_params(std::forward<ElementFn>(element_fn),
-                                 exec_preset,
-                                 mask,
-                                 param_tags,
-                                 std::index_sequence_for<ParamTags...>(),
-                                 std::forward<Params>(params)...);
+  detail::execute_element_fn_with_params(std::forward<ElementFn>(element_fn),
+                                         exec_preset,
+                                         mask,
+                                         param_tags,
+                                         std::index_sequence_for<ParamTags...>(),
+                                         std::forward<Params>(params)...);
 }
 
 template<typename ElementFn, ExecPresetC ExecPreset, typename Out, typename... In>
@@ -527,13 +531,12 @@ inline void batch_process__n_in__1_out(const IndexMask &mask,
 {
   constexpr auto param_tags =
       TypeSequence<ParamTag<ParamCategory::Input, In>..., ParamTag<ParamCategory::Output, Out>>();
-  execute_element_fn_with_params(
-      [&](const In &...in, Out &out) { new (&out) Out(element_fn(in...)); },
-      exec_preset,
-      mask,
-      param_tags,
-      in_params...,
-      out_param);
+  execute([&](const In &...in, Out &out) { new (&out) Out(element_fn(in...)); },
+          exec_preset,
+          mask,
+          param_tags,
+          in_params...,
+          out_param);
 }
 
 template<typename In1,

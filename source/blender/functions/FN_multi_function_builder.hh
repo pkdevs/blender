@@ -37,12 +37,8 @@ inline void execute_element_fn_as_multi_function(const ElementFn &element_fn,
                                                  TypeSequence<ParamTags...> /*param_tags*/,
                                                  std::index_sequence<I...> /*indices*/)
 {
-  varray_exec::execute_element_fn_with_params(
-      element_fn,
-      exec_preset,
-      mask,
-      TypeSequence<ParamTags...>(),
-      [&]() -> decltype(auto) {
+  varray_exec::execute(
+      element_fn, exec_preset, mask, TypeSequence<ParamTags...>(), [&]() -> decltype(auto) {
         /* Use `typedef` instead of `using` to work around a compiler bug. */
         using ParamTag = ParamTags;
         if constexpr (ParamTag::category == ParamCategory::Input) {
@@ -65,12 +61,8 @@ inline void execute_element_fn_as_multi_function(const ElementFn &element_fn,
                                                  Params params,
                                                  TypeSequence<ParamTags...> param_tags)
 {
-  execute_element_fn_as_multi_function(element_fn,
-                                       exec_preset,
-                                       mask,
-                                       params,
-                                       param_tags,
-                                       std::index_sequence_for<ParamTags...>());
+  execute_element_fn_as_multi_function(
+      element_fn, exec_preset, mask, params, param_tags, std::index_sequence_for<ParamTags...>());
 }
 
 /**
