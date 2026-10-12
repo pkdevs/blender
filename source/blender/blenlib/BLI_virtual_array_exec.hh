@@ -219,6 +219,43 @@ template<typename T, int VecSize> struct TypeSplitInfo<VecBase<T, VecSize>> {
   }
 };
 
+template<> struct TypeSplitInfo<ColorGeometry4f> {
+  static constexpr bool supports_split = true;
+  static constexpr int channels = 4;
+  template<int64_t MaxChunkSize>
+  using Split = std::array<std::array<float, MaxChunkSize>, channels>;
+
+  template<int64_t MaxChunkSize>
+  static ColorGeometry4f fetch(const Split<MaxChunkSize> &split, const int64_t i)
+  {
+    return ColorGeometry4f(split[0][i], split[1][i], split[2][i], split[3][i]);
+  }
+
+  template<int64_t MaxChunkSize>
+  static void store(Split<MaxChunkSize> &split, const int64_t i, const ColorGeometry4f &v)
+  {
+    unroll<channels>([&](const auto j) { split[j][i] = v[j]; });
+  }
+
+  template<int64_t MaxChunkSize>
+  static void split(const int64_t size, const ColorGeometry4f *values, Split<MaxChunkSize> &split)
+  {
+    for (const int64_t i : IndexRange(size)) {
+      store<MaxChunkSize>(split, i, values[i]);
+    }
+  }
+
+  template<int64_t MaxChunkSize>
+  static void merge(const int64_t size,
+                    const Split<MaxChunkSize> &split,
+                    ColorGeometry4f *r_values)
+  {
+    for (const int64_t i : IndexRange(size)) {
+      r_values[i] = fetch<MaxChunkSize>(split, i);
+    }
+  }
+};
+
 template<int64_t MaxChunkSize,
          typename ElementFn,
          size_t... I,
