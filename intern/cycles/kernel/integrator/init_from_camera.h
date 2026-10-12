@@ -86,7 +86,14 @@ ccl_device bool integrator_init_from_camera(KernelGlobals kg,
     }
 
     /* Count the sample and get an effective sample for this pixel. */
-    sample = film_write_sample(kg, state, render_buffer, scheduled_sample, tile->sample_offset);
+    if (tile->setup_restir || tile->setup_temporal || tile->final_evaluation) {
+      /* Resampling / final passes re-trace an already-counted sample. Read the
+       * effective sample without incrementing. */
+      sample = film_read_sample(kg, state, render_buffer, scheduled_sample, tile->sample_offset);
+    }
+    else {
+      sample = film_write_sample(kg, state, render_buffer, scheduled_sample, tile->sample_offset);
+    }
   }
 
   /* Initialize random number seed for path. */

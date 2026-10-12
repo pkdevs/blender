@@ -179,6 +179,25 @@ ccl_device_inline int film_write_sample(KernelGlobals kg,
          sample_offset;
 }
 
+/* It must return what the initial dispatch received.
+ * The initial dispatch gets old_count + sample_offset, where old_count is the value
+ * before its increment. After the increment the current value is old_count + 1. */
+ccl_device_inline int film_read_sample(KernelGlobals kg,
+                                       ConstIntegratorState state,
+                                       ccl_global float *ccl_restrict render_buffer,
+                                       const int sample,
+                                       const int sample_offset)
+{
+  if (kernel_data.film.pass_sample_count == PASS_UNUSED) {
+    return sample;
+  }
+
+  ccl_global float *buffer = film_pass_pixel_render_buffer(kg, state, render_buffer);
+  const uint count = *((ccl_global uint *)(buffer) + kernel_data.film.pass_sample_count);
+  /* Substract the old value by 1. */
+  return int(count) - 1 + sample_offset;
+}
+
 // This is a secondary commit used for adaptive sampling. It writes the contribution to a separate buffer to help Cycles determine if the pixel has converged.
 ccl_device void film_write_adaptive_buffer(KernelGlobals kg, 
                                            const int sample,

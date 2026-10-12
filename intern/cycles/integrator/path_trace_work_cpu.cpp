@@ -113,7 +113,7 @@ void PathTraceWorkCPU::initial_resampling(const int64_t image_width,
 
     ThreadKernelGlobalsCPU *kernel_globals = kernel_thread_globals_->data();
 
-    render_samples_full_pipeline(kernel_globals, work_tile);
+    render_samples_full_pipeline(kernel_globals, work_tile); // Total darkness if commented out
   });
 }
 
@@ -132,9 +132,9 @@ void PathTraceWorkCPU::temporal_resampling(const int64_t image_width,
     KernelWorkTile work_tile;
     setup_work_tile(work_tile, work_index, image_width, image_height, start_sample, sample_offset);
 
-    ThreadKernelGlobalsCPU *kernel_globals = kernel_thread_globals_->data();
+    ThreadKernelGlobalsCPU *kernel_globals = kernel_thread_globals_->data(); // !!!: Unused
 
-    render_samples_temporal_resampling(kernel_globals, work_tile);//
+    render_samples_temporal_resampling(kernel_globals, work_tile); // Not the dimming issue!
   });
 }
 
@@ -244,6 +244,48 @@ void PathTraceWorkCPU::render_samples(RenderStatistics &statistics,
       kernel_globals.stop_profiling();
     }
   }
+
+{ // !!!: DEBUG ONLY
+  const KernelFilm &f = device_scene_->data.film;
+  if (f.pass_volume_direct != PASS_UNUSED) {
+    const float *rb = buffers_->buffer.data();
+    const size_t n = size_t(image_width) * image_height;
+    double sum = 0.0;
+    for (size_t i = 0; i < n; i++) {
+      const float *p = rb + i * f.pass_stride + f.pass_volume_direct;
+      sum += double(p[0]) + double(p[1]) + double(p[2]);
+    }
+    printf("render_samples(): VOLDIRECT mean_per_pixel=%f sample_start=%d\n", 
+        sum / double(n), start_sample);
+  }
+
+  // const size_t px = 250; // Check a proper pixel on a flat colored diffuse surface
+  // const float *p = buffers_->buffer.data() + px * f.pass_stride;
+  // printf("CHK start_sample=%d samples_num=%d count_pass=%f diffcolor_r=%f\n",
+  //        start_sample, samples_num,
+  //        (f.pass_sample_count != PASS_UNUSED) ? p[f.pass_sample_count] : -1.0f,
+  //        (f.pass_diffuse_color != PASS_UNUSED) ? p[f.pass_diffuse_color] : -1.0f);
+}
+{
+  const KernelFilm &f = device_scene_->data.film;
+  const float *rb = buffers_->buffer.data();
+  const size_t n = size_t(image_width) * image_height;
+  double color = 0.0, count = 0.0;
+  size_t hit = 0;
+  for (size_t i = 0; i < n; i++) {
+    const float *p = rb + i * f.pass_stride;
+    if (f.pass_diffuse_color != PASS_UNUSED && p[f.pass_diffuse_color] > 0.0f) {
+      color += p[f.pass_diffuse_color];
+      hit++;
+    }
+    if (f.pass_sample_count != PASS_UNUSED) {
+      count += double(reinterpret_cast<const uint32_t *>(p)[f.pass_sample_count]);
+    }
+  }
+  printf("CHK start=%d hit=%zu mean_diffR=%f mean_count=%f stride=%d off_diffcol=%d off_count=%d\n",
+         start_sample, hit, hit ? color / hit : 0.0, count / double(n), f.pass_stride,
+         f.pass_diffuse_color, f.pass_sample_count);
+}
 
   statistics.occupancy = 1.0f;
 }
