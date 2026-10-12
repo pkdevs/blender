@@ -987,6 +987,7 @@ static void but_update_old_active_from_new(Button *oldbut, Button *but)
   oldbut->icon = but->icon;
   oldbut->iconadd = but->iconadd;
   oldbut->alignnr = but->alignnr;
+  oldbut->custom_data = but->custom_data;
 
   oldbut->text_direction = but->text_direction;
 
@@ -2877,7 +2878,7 @@ bool button_supports_cycling(const Button *but)
                ButtonType::ListBox) ||
           (but->type == ButtonType::Menu && button_menu_step_poll(but)) ||
           (but->type == ButtonType::Color &&
-           (static_cast<ButtonColor *>(const_cast<Button *>(but)))->is_pallete_color) ||
+           (static_cast<ButtonColor *>(const_cast<Button *>(but)))->is_palette_color) ||
           (but->menu_step_func != nullptr));
 }
 
