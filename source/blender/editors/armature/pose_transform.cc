@@ -616,18 +616,14 @@ void POSE_OT_visual_transform_apply(wmOperatorType *ot)
 static void blend_bbone_values(const bPoseChannel &copy_bone,
                                bPoseChannel &paste_bone,
                                const float factor,
-                               const bool flip)
+                               const bool do_flip)
 {
-  float curve_in_x = copy_bone.curve_in_x;
-  float curve_out_x = copy_bone.curve_out_x;
-  float roll1 = copy_bone.roll1;
-  float roll2 = copy_bone.roll2;
-  if (flip) {
-    curve_in_x *= -1;
-    curve_out_x *= -1;
-    roll1 *= -1;
-    roll2 *= -1;
-  }
+  const float flip_factor = do_flip ? -1 : 1;
+  const float curve_in_x = copy_bone.curve_in_x * flip_factor;
+  const float curve_out_x = copy_bone.curve_out_x * flip_factor;
+  const float roll1 = copy_bone.roll1 * flip_factor;
+  const float roll2 = copy_bone.roll2 * flip_factor;
+
   /* B-Bone posing options should also be included... */
   paste_bone.curve_in_x = interpf(curve_in_x, paste_bone.curve_in_x, factor);
   paste_bone.curve_in_z = interpf(copy_bone.curve_in_z, paste_bone.curve_in_z, factor);
@@ -780,6 +776,7 @@ static bPoseChannel *pose_bone_blend_to(Object &paste_ob,
       ed::AnimTransformable::PropertyType::LOCATION);
   ed::Rotation rotation = copy_transformable.get_rotation();
   if (flip) {
+    /* Flips on the y-z plane. Has to be done here to correctly blend to the flipped pose. */
     location[0] *= -1;
     rotation.mirror();
   }

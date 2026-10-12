@@ -211,7 +211,6 @@ void Rotation::mirror()
       values[2] *= -1;
       values[3] *= -1;
       break;
-      break;
 
     default:
       BLI_assert(mode <= ROT_MODE_ZYX);
