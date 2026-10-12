@@ -398,12 +398,15 @@ struct StripColumn: View, Equatable {
   @ViewBuilder
   private var control: some View {
     switch type {
+      /* A switch, not the button the toolbar would make of a toggle. */
       case "BOOLEAN":
         PropertyToggle(store: store, property: property)
+          .toggleStyle(.switch)
           .scaleEffect(0.7)
           .frame(width: 40, height: 24)
       case "OPERATOR" where property.bool("checkbox"):
         OperatorToggle(store: store, property: property)
+          .toggleStyle(.switch)
           .scaleEffect(0.7)
           .frame(width: 40, height: 24)
       case "OPERATOR":
