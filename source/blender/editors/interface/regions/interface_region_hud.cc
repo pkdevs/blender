@@ -164,7 +164,26 @@ static void hud_panel_operator_redo_draw_header(const bContext *C, Panel *panel)
 {
   wmOperator *op = WM_operator_last_redo(C);
   const std::string opname = WM_operatortype_name(op->type, op->ptr);
-  panel_drawname_set(panel, opname);
+  Layout *layout = panel->layout;
+  Block *block = layout->block();
+
+  layout->use_property_split_set(false);
+  Layout &row = layout->row(true);
+  row.label(opname, ICON_NONE);
+  block_layout_set_current(block, &row);
+  /* Note to myself: This works but no idea why it fails when expanding panel. I'll figure out
+   * alternative later. */
+  row.separator_spacer();
+  panel->drawname = nullptr;
+  MEM_SAFE_DELETE(panel->drawname);
+
+  block_emboss_set(block, EmbossType::None);
+
+  Button *but = uiDefIconBut(
+      block, ButtonType::Grip, ICON_GRIP, 0, 0, UI_UNIT_X, UI_UNIT_Y, nullptr, 0.0f, 0.0f, "");
+  button_operator_set(but, WM_operatortype_find("SCREEN_OT_hud_region_translate", false), wm::OpCallContext::InvokeDefault, nullptr);
+
+  block_emboss_set(block, EmbossType::Emboss);
 }
 
 static void hud_panel_operator_redo_draw(const bContext *C, Panel *panel)

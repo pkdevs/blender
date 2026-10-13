@@ -8028,6 +8028,61 @@ static void SCREEN_OT_workspace_cycle(wmOperatorType *ot)
                "Direction to cycle through");
 }
 
+static wmOperatorStatus screen_hud_region_translate_modal(bContext *C,
+                                                     wmOperator */*op*/,
+                                                     const wmEvent *event)
+{
+  switch (event->type) {
+    case LEFTMOUSE: {
+      if (ELEM(event->val, KM_RELEASE, KM_CLICK)) {
+        WM_cursor_modal_restore(CTX_wm_window(C));
+        ED_region_tag_redraw(CTX_wm_region(C));
+        return OPERATOR_FINISHED;
+      }
+      break;
+    }
+    case MOUSEMOVE: {
+      ARegion *region = CTX_wm_region(C);
+      wmWindow *win = CTX_wm_window(C);
+
+      wmEvent *event = win->runtime->eventstate;
+      const int diff[2] = {event->xy[0] - event->prev_xy[0], event->xy[1] - event->prev_xy[1]};
+      region->runtime->offset_x += diff[0];
+      region->runtime->offset_y += diff[1];
+      BLI_rcti_translate(&region->winrct, diff[0], diff[1]);
+
+      WM_cursor_modal_set(win, WM_CURSOR_HAND_CLOSED);
+      ED_region_update_rect(region);
+      ED_region_tag_redraw(region);
+      break;
+    }
+    default: break;
+  }
+  return OPERATOR_RUNNING_MODAL;
+}
+
+static wmOperatorStatus screen_hud_region_translate_invoke(bContext *C,
+                                                     wmOperator *op,
+                                                     const wmEvent * /*event*/)
+{
+  WM_event_add_modal_handler(C, op);
+  return OPERATOR_RUNNING_MODAL;
+}
+
+static void SCREEN_OT_hud_region_translate(wmOperatorType *ot)
+{
+  /* identifiers */
+  ot->name = "Translate redo panel";
+  ot->description = "Move redo panel with mouse drag";
+  ot->idname = "SCREEN_OT_hud_region_translate";
+
+  /* API callbacks. */
+  ot->invoke = screen_hud_region_translate_invoke;
+  ot->modal = screen_hud_region_translate_modal;
+  ot->poll = ED_operator_screenactive;
+
+  ot->flag = 0;
+}
 /** \} */
 
 /* -------------------------------------------------------------------- */
@@ -8088,6 +8143,8 @@ void ED_operatortypes_screen()
   /* New/delete. */
   WM_operatortype_append(SCREEN_OT_new);
   WM_operatortype_append(SCREEN_OT_delete);
+
+  WM_operatortype_append(SCREEN_OT_hud_region_translate);
 }
 
 /** \} */

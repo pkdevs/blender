@@ -9770,6 +9770,10 @@ static void button_activate_init(bContext *C,
   }
 
   if (but->type == ButtonType::Grip) {
+    if (region->regiontype == RGN_TYPE_HUD) {
+      WM_cursor_modal_set(data->window, WM_CURSOR_HAND);
+      return;
+    }
     const bool horizontal = (BLI_rctf_size_x(&but->rect) < BLI_rctf_size_y(&but->rect));
     WM_cursor_modal_set(data->window, horizontal ? WM_CURSOR_X_MOVE : WM_CURSOR_Y_MOVE);
   }
@@ -12857,28 +12861,6 @@ static int region_handler(bContext *C, const wmEvent *event, void * /*userdata*/
     return retval;
   }
 
-  if (region->regiontype == RGN_TYPE_HUD && region->alignment == RGN_ALIGN_FLOAT) {
-    if (event->type == LEFTMOUSE) {
-      if (event->val == KM_PRESS_DRAG) {
-        region->runtime->flag |= (bke::ARegionRuntimeFlag::HUD_DRAG);
-      }
-      if (event->val == KM_RELEASE) {
-        region->runtime->flag &= ~bke::ARegionRuntimeFlag::HUD_DRAG;
-      }
-    }
-    else if ((region->runtime->flag & bke::ARegionRuntimeFlag::HUD_DRAG) &&
-             event->type == MOUSEMOVE)
-    {
-      int diff[2];
-      sub_v2_v2v2_int(diff, event->xy, event->prev_xy);
-      region->runtime->offset_x += diff[0];
-      region->runtime->offset_y += diff[1];
-
-      BLI_rcti_translate(&region->winrct, diff[0], diff[1]);
-      ED_region_update_rect(region);
-      ED_region_tag_redraw(region);
-    }
-  }
   /* either handle events for already activated button or try to activate */
   Button *but = region_find_active_but(region);
   Button *listbox = listbox_find_mouse_over(region, event);
