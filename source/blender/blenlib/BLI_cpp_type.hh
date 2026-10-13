@@ -25,8 +25,6 @@
  * - Sometimes a combination can make sense. Optimized code can be generated at compile-time for
  *   some types, while there is a fallback code path using #CPPType for all other types.
  *   #CPPType::to_static_type allows dispatching between both versions based on the type.
- * - Code that only copies values around without interpreting them can be generated once per size
- *   instead of once per type with #CPPType::to_static_bytes_type.
  *
  * Under some circumstances, #CPPType serves a similar role as #std::type_info. However, #CPPType
  * has much more utility because it contains methods for actually working with instances of the
@@ -431,24 +429,6 @@ class CPPType : NonCopyable, NonMovable {
   /** Same as #to_static_type_try, but asserts if the type is valid. */
   template<typename... Types, typename Fn> void to_static_type(Fn &&fn) const;
 
-  /**
-   * Similar to #to_static_type_try, but calls the templated function with the type's
-   * #cpp_type_util::BytesType instead of the type itself. Meant for code that just moves values
-   * around without interpreting them. Only supported for common trivial types, and only the bytes
-   * types of the most common sizes are generated.
-   *
-   * Use #GSpan::typed_for_bytes to retrieve typed spans of the bytes type.
-   *
-   * \return True if the function was called.
-   */
-  template<typename Fn> bool to_static_bytes_type_try(Fn &&fn) const;
-
-  /** Same as #to_static_bytes_type_try, but asserts if the type is not supported. */
-  template<typename Fn> void to_static_bytes_type(Fn &&fn) const;
-
-  /** True if T can be used as bytes type for this type. */
-  template<typename T> bool is_compatible_bytes_type() const;
-
  private:
   /**
    * Helper used in #to_static_type_try as a typed function pointer for each type in the list.
@@ -838,116 +818,6 @@ template<typename... Types, typename Fn> inline bool CPPType::to_static_type_try
   }
   callback(fn);
   return true;
-}
-
-namespace cpp_type_util {
-
-template<int64_t Size> struct UIntForSize;
-template<> struct UIntForSize<1> {
-  using type = uint8_t;
-};
-template<> struct UIntForSize<2> {
-  using type = uint16_t;
-};
-template<> struct UIntForSize<4> {
-  using type = uint32_t;
-};
-template<> struct UIntForSize<8> {
-  using type = uint64_t;
-};
-
-/**
- * An array of the largest unsigned integers that the alignment allows. The array is used instead
- * of a byte array, because GCC doesn't vectorize some loops with byte arrays.
- */
-template<int64_t Size, int64_t Alignment> struct alignas(Alignment) BytesTypeArray {
-  static constexpr int64_t ValueSize = Alignment < 8 ? Alignment : 8;
-  typename UIntForSize<ValueSize>::type values[size_t(Size / ValueSize)];
-};
-
-template<int64_t Size, int64_t Alignment> struct BytesTypeImpl {
-  using type = BytesTypeArray<Size, Alignment>;
-};
-template<int64_t Size>
-  requires(Size <= 8)
-struct BytesTypeImpl<Size, Size> {
-  using type = typename UIntForSize<Size>::type;
-};
-
-/**
- * A trivial type with the same size and alignment as \a T, used to reduce the amount of generated
- * code when the type is just e.g. moved around. Scalars and arrays of scalars are used, because
- * they generally result in the same generated code as the original types.
- * See #CPPType::to_static_bytes_type.
- *
- * \note This relies on Blender being compiled without strict aliasing.
- */
-template<typename T>
-using BytesType = typename BytesTypeImpl<int64_t(sizeof(T)), int64_t(alignof(T))>::type;
-
-}  // namespace cpp_type_util
-
-template<typename T> inline bool CPPType::is_compatible_bytes_type() const
-{
-  return this->is_trivial && this->size == int64_t(sizeof(T)) &&
-         this->alignment == int64_t(alignof(T));
-}
-
-template<typename Fn> inline bool CPPType::to_static_bytes_type_try(Fn &&fn) const
-{
-  using namespace cpp_type_util;
-  if (!this->is_trivial) {
-    return false;
-  }
-  const auto call = [&]<int64_t Size, int64_t Alignment>() {
-    fn.template operator()<typename BytesTypeImpl<Size, Alignment>::type>();
-    return true;
-  };
-  /* Only the combinations of size and alignment of the some common types are generated,
-   * since every combination adds code at every call site (the fallback is usually a call to
-   * functions like #CPPType::copy_construct). */
-  switch (this->size) {
-    case 1:
-      return call.template operator()<1, 1>();
-    case 4:
-      switch (this->alignment) {
-        case 1:
-          return call.template operator()<4, 1>();
-        case 2:
-          return call.template operator()<4, 2>();
-        case 4:
-          return call.template operator()<4, 4>();
-      }
-      break;
-    case 8:
-      if (this->alignment == 4) {
-        return call.template operator()<8, 4>();
-      }
-      break;
-    case 12:
-      if (this->alignment == 4) {
-        return call.template operator()<12, 4>();
-      }
-      break;
-    case 16:
-      if (this->alignment == 4) {
-        return call.template operator()<16, 4>();
-      }
-      break;
-    case 64:
-      if (this->alignment == 16) {
-        return call.template operator()<64, 16>();
-      }
-      break;
-  }
-  return false;
-}
-
-template<typename Fn> inline void CPPType::to_static_bytes_type(Fn &&fn) const
-{
-  if (!this->to_static_bytes_type_try(fn)) {
-    BLI_assert_unreachable();
-  }
 }
 
 }  // namespace blender

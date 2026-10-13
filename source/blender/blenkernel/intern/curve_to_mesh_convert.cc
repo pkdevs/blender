@@ -11,6 +11,7 @@
 
 #include "BLI_array.hh"
 #include "BLI_array_utils.hh"
+#include "BLI_bytes_type.hh"
 #include "BLI_math_matrix.hh"
 #include "BLI_task.hh"
 
@@ -689,9 +690,9 @@ static void copy_main_point_domain_attribute_to_mesh(const CurvesInfo &curves_in
     }
   }
   const GSpan src_all = evaluate_attribute(*src_attribute, curves_info.main, eval_buffer);
-  src_attribute.varray.type().to_static_bytes_type([&]<typename T>() {
-    const Span<T> src = src_all.typed_for_bytes<T>();
-    MutableSpan<T> dst = dst_attribute.span.typed_for_bytes<T>();
+  attribute_math::to_static_bytes_type(src_attribute.varray.type(), [&]<typename T>() {
+    const Span<T> src = bytes_type::typed<T>(src_all);
+    MutableSpan<T> dst = bytes_type::typed<T>(dst_attribute.span);
     switch (dst_domain) {
       case AttrDomain::Point:
         foreach_curve_combination(curves_info, offsets, [&](const CombinationInfo &info) {
@@ -771,9 +772,9 @@ static void copy_profile_point_domain_attribute_to_mesh(const CurvesInfo &curves
                                                         const GSpan src_all,
                                                         GMutableSpan dst_all)
 {
-  src_all.type().to_static_bytes_type([&]<typename T>() {
-    const Span<T> src = src_all.typed_for_bytes<T>();
-    MutableSpan<T> dst = dst_all.typed_for_bytes<T>();
+  attribute_math::to_static_bytes_type(src_all.type(), [&]<typename T>() {
+    const Span<T> src = bytes_type::typed<T>(src_all);
+    MutableSpan<T> dst = bytes_type::typed<T>(dst_all);
     switch (dst_domain) {
       case AttrDomain::Point:
         foreach_curve_combination(curves_info, offsets, [&](const CombinationInfo &info) {
@@ -843,9 +844,9 @@ static void copy_curve_domain_attribute_to_mesh(const ResultOffsets &mesh_offset
       return;
   }
   const GVArraySpan src_span(src);
-  src.type().to_static_bytes_type([&]<typename T>() {
+  attribute_math::to_static_bytes_type(src.type(), [&]<typename T>() {
     copy_indices_to_offset_ranges(
-        src_span.typed_for_bytes<T>(), curve_indices, offsets, dst.typed_for_bytes<T>());
+        bytes_type::typed<T>(src_span), curve_indices, offsets, bytes_type::typed<T>(dst));
   });
 }
 

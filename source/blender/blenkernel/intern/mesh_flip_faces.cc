@@ -9,6 +9,7 @@
 #include "DNA_mesh_types.h"
 #include "DNA_meshdata_types.h"
 
+#include "BLI_bytes_type.hh"
 #include "BLI_task.hh"
 
 #include "BKE_attribute.hh"
@@ -94,8 +95,8 @@ void mesh_flip_faces(Mesh &mesh, const IndexMask &selection)
       return;
     }
     GSpanAttributeWriter attribute = attributes.lookup_for_write_span(iter.name);
-    attribute.span.type().to_static_bytes_type([&]<typename T>() {
-      flip_corner_data(faces, selection, attribute.span.typed_for_bytes<T>());
+    attribute_math::to_static_bytes_type(attribute.span.type(), [&]<typename T>() {
+      flip_corner_data(faces, selection, bytes_type::typed<T>(attribute.span));
     });
     attribute.finish();
   });

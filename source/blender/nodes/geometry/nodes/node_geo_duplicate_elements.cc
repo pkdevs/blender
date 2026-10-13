@@ -3,6 +3,7 @@
  * SPDX-License-Identifier: GPL-2.0-or-later */
 
 #include "BLI_array_utils.hh"
+#include "BLI_bytes_type.hh"
 #include "BLI_noise.hh"
 #include "BLI_offset_indices.hh"
 #include "BLI_span.hh"
@@ -10,6 +11,7 @@
 
 #include "DNA_pointcloud_types.h"
 
+#include "BKE_attribute_math.hh"
 #include "BKE_curves.hh"
 #include "BKE_customdata.hh"
 #include "BKE_grease_pencil.hh"
@@ -194,9 +196,9 @@ static void copy_curve_attributes_without_id(const bke::CurvesGeometry &src_curv
         array_utils::gather_to_groups(curve_offsets, selection, attribute.src, attribute.dst.span);
         break;
       case AttrDomain::Point:
-        attribute.src.type().to_static_bytes_type([&]<typename T>() {
-          const Span<T> src = attribute.src.typed_for_bytes<T>();
-          MutableSpan<T> dst = attribute.dst.span.typed_for_bytes<T>();
+        bke::attribute_math::to_static_bytes_type(attribute.src.type(), [&]<typename T>() {
+          const Span<T> src = bytes_type::typed<T>(attribute.src);
+          MutableSpan<T> dst = bytes_type::typed<T>(attribute.dst.span);
           selection.foreach_index(
               [&](const int64_t index, const int64_t i_selection) {
                 const Span<T> curve_src = src.slice(src_points_by_curve[index]);
@@ -928,9 +930,9 @@ static bke::CurvesGeometry duplicate_points_CurvesGeometry(
            {bke::AttrDomain::Curve},
            bke::attribute_filter_with_skip_ref(attribute_filter, {"id"})))
   {
-    attribute.src.type().to_static_bytes_type([&]<typename T>() {
-      const Span<T> src = attribute.src.typed_for_bytes<T>();
-      MutableSpan<T> dst = attribute.dst.span.typed_for_bytes<T>();
+    bke::attribute_math::to_static_bytes_type(attribute.src.type(), [&]<typename T>() {
+      const Span<T> src = bytes_type::typed<T>(attribute.src);
+      MutableSpan<T> dst = bytes_type::typed<T>(attribute.dst.span);
       selection.foreach_index(
           [&](const int64_t index, const int64_t i_selection) {
             const T &src_value = src[point_to_curve_map[index]];

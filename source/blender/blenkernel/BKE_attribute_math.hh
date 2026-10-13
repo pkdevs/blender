@@ -9,6 +9,7 @@
 #pragma once
 
 #include "BLI_array.hh"
+#include "BLI_bytes_type.hh"
 #include "BLI_color_types.hh"
 #include "BLI_cpp_type.hh"
 #include "BLI_generic_span.hh"
@@ -29,24 +30,41 @@ class GVArray;
 
 namespace bke::attribute_math {
 
+/** The C++ types of the attribute types that the static type utilities below support. */
+using AttributeTypes = TypeSequence<float,
+                                    float2,
+                                    float3,
+                                    float4,
+                                    int,
+                                    int2,
+                                    bool,
+                                    int8_t,
+                                    short2,
+                                    ColorGeometry4f,
+                                    ColorGeometry4b,
+                                    math::Quaternion,
+                                    float4x4>;
+
 /**
  * Utility function that simplifies calling a templated function based on a run-time data type.
  */
 template<typename Fn> inline void to_static_type(const CPPType &cpp_type, Fn &&fn)
 {
-  cpp_type.to_static_type<float,
-                          float2,
-                          float3,
-                          float4,
-                          int,
-                          int2,
-                          bool,
-                          int8_t,
-                          short2,
-                          ColorGeometry4f,
-                          ColorGeometry4b,
-                          math::Quaternion,
-                          float4x4>([&]<typename T>() { fn.template operator()<T>(); });
+  [&]<typename... Types>(TypeSequence<Types...> /*types*/) {
+    cpp_type.to_static_type<Types...>([&]<typename T>() { fn.template operator()<T>(); });
+  }(AttributeTypes());
+}
+
+/**
+ * Similar to #to_static_type, but for moving values around without interpreting them. The function
+ * is called with the type's #bytes_type::BytesType where possible, so that its code is shared
+ * between types with the same layout. Use #bytes_type::typed to retrieve spans.
+ */
+template<typename Fn> inline void to_static_bytes_type(const CPPType &cpp_type, Fn &&fn)
+{
+  [&]<typename... Types>(TypeSequence<Types...> /*types*/) {
+    bytes_type::to_static_type<Types...>(cpp_type, fn);
+  }(AttributeTypes());
 }
 
 template<typename Fn> inline void to_static_type(const bke::AttrType data_type, Fn &&fn)

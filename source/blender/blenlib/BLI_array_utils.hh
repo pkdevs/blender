@@ -10,6 +10,7 @@
 
 #include <numeric>
 
+#include "BLI_bytes_type.hh"
 #include "BLI_execution_mode.hh"
 #include "BLI_generic_span.hh"
 #include "BLI_generic_virtual_array.hh"
@@ -47,6 +48,142 @@ constexpr auto exec_mode_tag_for_copy(const Mode mode, const int64_t type_size)
   }
 }
 
+namespace detail {
+
+template<typename T, typename Fn>
+inline void call_with_copy_tag(const exec_mode::Mode mode, Fn &&fn)
+{
+  if (mode.is_parallel) {
+    fn(exec_mode::grain_size(int(calc_copy_grain_size(mode, int64_t(sizeof(T))))));
+  }
+  else {
+    fn(exec_mode::serial);
+  }
+}
+
+template<typename T>
+void copy_impl(const Span<T> src,
+               const IndexMask &selection,
+               MutableSpan<T> dst,
+               const exec_mode::Mode mode)
+{
+  call_with_copy_tag<T>(mode, [&](const auto tag) {
+    selection.foreach_index_optimized<int64_t>([&](const int64_t i) { dst[i] = src[i]; }, tag);
+  });
+}
+
+#define BLI_ARRAY_UTILS_EXTERN_TEMPLATE(T) \
+  extern template void copy_impl(Span<T>, const IndexMask &, MutableSpan<T>, exec_mode::Mode);
+BLI_BYTES_TYPE_FOREACH_SHARED(BLI_ARRAY_UTILS_EXTERN_TEMPLATE)
+#undef BLI_ARRAY_UTILS_EXTERN_TEMPLATE
+
+template<typename T, typename IndexT>
+void scatter_impl(const Span<T> src,
+                  const Span<IndexT> indices,
+                  MutableSpan<T> dst,
+                  const exec_mode::Mode mode)
+{
+  const auto scatter_range = [&](const IndexRange range) {
+    for (const int64_t i : range) {
+      dst[indices[i]] = src[i];
+    }
+  };
+  if (!mode.is_parallel) {
+    scatter_range(indices.index_range());
+    return;
+  }
+  threading::parallel_for(
+      indices.index_range(), calc_copy_grain_size(mode, int64_t(sizeof(T))), scatter_range);
+}
+
+#define BLI_ARRAY_UTILS_EXTERN_TEMPLATE(T) \
+  extern template void scatter_impl(Span<T>, Span<int>, MutableSpan<T>, exec_mode::Mode);
+BLI_BYTES_TYPE_FOREACH_SHARED(BLI_ARRAY_UTILS_EXTERN_TEMPLATE)
+#undef BLI_ARRAY_UTILS_EXTERN_TEMPLATE
+
+template<typename T>
+void scatter_impl(const Span<T> src,
+                  const IndexMask &indices,
+                  MutableSpan<T> dst,
+                  const exec_mode::Mode mode)
+{
+  call_with_copy_tag<T>(mode, [&](const auto tag) {
+    indices.foreach_index_optimized<int64_t>(
+        [&](const int64_t index, const int64_t pos) { dst[index] = src[pos]; }, tag);
+  });
+}
+
+#define BLI_ARRAY_UTILS_EXTERN_TEMPLATE(T) \
+  extern template void scatter_impl(Span<T>, const IndexMask &, MutableSpan<T>, exec_mode::Mode);
+BLI_BYTES_TYPE_FOREACH_SHARED(BLI_ARRAY_UTILS_EXTERN_TEMPLATE)
+#undef BLI_ARRAY_UTILS_EXTERN_TEMPLATE
+
+template<typename T, typename IndexT>
+void gather_impl(const Span<T> src,
+                 const Span<IndexT> indices,
+                 const IndexMask &dst_mask,
+                 MutableSpan<T> dst,
+                 const exec_mode::Mode mode)
+{
+  PRF_scope(ProfileCategory::Default);
+  call_with_copy_tag<T>(mode, [&](const auto tag) {
+    dst_mask.foreach_index_optimized<int64_t>([&](const int64_t i) { dst[i] = src[indices[i]]; },
+                                              tag);
+  });
+}
+
+#define BLI_ARRAY_UTILS_EXTERN_TEMPLATE(T) \
+  extern template void gather_impl( \
+      Span<T>, Span<int>, const IndexMask &, MutableSpan<T>, exec_mode::Mode);
+BLI_BYTES_TYPE_FOREACH_SHARED(BLI_ARRAY_UTILS_EXTERN_TEMPLATE)
+#undef BLI_ARRAY_UTILS_EXTERN_TEMPLATE
+
+template<typename T>
+void gather_to_groups_impl(const OffsetIndices<int> dst_offsets,
+                           const IndexMask &src_selection,
+                           const Span<T> src,
+                           MutableSpan<T> dst)
+{
+  PRF_scope(ProfileCategory::Default);
+  src_selection.foreach_index(
+      [&](const int src_i, const int dst_i) { dst.slice(dst_offsets[dst_i]).fill(src[src_i]); },
+      exec_mode::grain_size(1024));
+}
+
+#define BLI_ARRAY_UTILS_EXTERN_TEMPLATE(T) \
+  extern template void gather_to_groups_impl( \
+      OffsetIndices<int>, const IndexMask &, Span<T>, MutableSpan<T>);
+BLI_BYTES_TYPE_FOREACH_SHARED(BLI_ARRAY_UTILS_EXTERN_TEMPLATE)
+#undef BLI_ARRAY_UTILS_EXTERN_TEMPLATE
+
+/**
+ * The trivial versions of functions that copy contiguous ranges of values can be even simpler by
+ * using memcpy.
+ */
+
+void copy_trivial(
+    const void *src, void *dst, int64_t size, int64_t type_size, exec_mode::Mode mode);
+void gather_group_to_group_trivial(OffsetIndices<int> src_offsets,
+                                   OffsetIndices<int> dst_offsets,
+                                   const IndexMask &selection,
+                                   const void *src,
+                                   void *dst,
+                                   int64_t type_size);
+void gather_group_to_group_trivial(OffsetIndices<int> src_offsets,
+                                   OffsetIndices<int> dst_offsets,
+                                   Span<int> selection,
+                                   const void *src,
+                                   void *dst,
+                                   int64_t type_size);
+void copy_group_to_group_trivial(OffsetIndices<int> src_offsets,
+                                 OffsetIndices<int> dst_offsets,
+                                 const IndexMask &selection,
+                                 const void *src,
+                                 void *dst,
+                                 int64_t type_size);
+
+}  // namespace detail
+
 /**
  * Fill the destination span by copying all values from the `src` array.
  */
@@ -73,13 +210,16 @@ template<typename T, exec_mode::Tag Mode = exec_mode::Parallel>
 inline void copy(const Span<T> src, MutableSpan<T> dst, const Mode mode = {})
 {
   BLI_assert(src.size() == dst.size());
-  if constexpr (!mode.is_parallel) {
+  if constexpr (std::is_trivially_copyable_v<T>) {
+    detail::copy_trivial(src.data(), dst.data(), src.size(), sizeof(T), mode);
+  }
+  else if constexpr (!mode.is_parallel) {
     dst.copy_from(src);
   }
   else {
     const int64_t grain_size = calc_copy_grain_size(mode, sizeof(T));
     threading::parallel_for(src.index_range(), grain_size, [&](const IndexRange range) {
-      copy(src.slice(range), dst.slice(range), exec_mode::serial);
+      dst.slice(range).copy_from(src.slice(range));
     });
   }
 }
@@ -102,8 +242,8 @@ inline void copy(const Span<T> src,
                  const Mode mode = {})
 {
   BLI_assert(src.size() == dst.size());
-  selection.foreach_index_optimized<int64_t>([&](const int64_t i) { dst[i] = src[i]; },
-                                             exec_mode_tag_for_copy(mode, sizeof(T)));
+  using U = bytes_type::StaticType<T>;
+  detail::copy_impl(src.template cast<U>(), selection, dst.template cast<U>(), mode);
 }
 
 /** Copy integers from a between two spans while adding an offset. */
@@ -145,17 +285,8 @@ inline void scatter(const Span<T> src,
                     const Mode mode = {})
 {
   BLI_assert(indices.size() == src.size());
-  if constexpr (!mode.is_parallel) {
-    for (const int64_t i : indices.index_range()) {
-      dst[indices[i]] = src[i];
-    }
-  }
-  else {
-    const int64_t grain_size = calc_copy_grain_size(mode, sizeof(T));
-    threading::parallel_for(indices.index_range(), grain_size, [&](const IndexRange range) {
-      scatter(src.slice(range), indices.slice(range), dst, exec_mode::serial);
-    });
-  }
+  using U = bytes_type::StaticType<T>;
+  detail::scatter_impl(src.template cast<U>(), indices, dst.template cast<U>(), mode);
 }
 
 template<typename T, exec_mode::Tag Mode = exec_mode::Parallel>
@@ -166,9 +297,8 @@ inline void scatter(const Span<T> src,
 {
   BLI_assert(indices.size() == src.size());
   BLI_assert(indices.min_array_size() <= dst.size());
-  indices.foreach_index_optimized<int64_t>(
-      [&](const int64_t index, const int64_t pos) { dst[index] = src[pos]; },
-      exec_mode_tag_for_copy(mode, sizeof(T)));
+  using U = bytes_type::StaticType<T>;
+  detail::scatter_impl(src.template cast<U>(), indices, dst.template cast<U>(), mode);
 }
 
 /**
@@ -219,10 +349,9 @@ inline void gather(const Span<T> src,
                    MutableSpan<T> dst,
                    const Mode mode = {})
 {
-  PRF_scope_with_name("array_utils::gather", ProfileCategory::Default);
   BLI_assert(indices.size() >= dst.size());
-  dst_mask.foreach_index_optimized<int64_t>([&](const int64_t i) { dst[i] = src[indices[i]]; },
-                                            exec_mode_tag_for_copy(mode, sizeof(T)));
+  using U = bytes_type::StaticType<T>;
+  detail::gather_impl(src.template cast<U>(), indices, dst_mask, dst.template cast<U>(), mode);
 }
 
 /**
@@ -287,11 +416,17 @@ inline void gather_group_to_group(const OffsetIndices<int> src_offsets,
                                   const Span<T> src,
                                   MutableSpan<T> dst)
 {
-  selection.foreach_index(
-      [&](const int64_t src_i, const int64_t dst_i) {
-        dst.slice(dst_offsets[dst_i]).copy_from(src.slice(src_offsets[src_i]));
-      },
-      exec_mode::grain_size(512));
+  if constexpr (std::is_trivially_copyable_v<T>) {
+    detail::gather_group_to_group_trivial(
+        src_offsets, dst_offsets, selection, src.data(), dst.data(), sizeof(T));
+  }
+  else {
+    selection.foreach_index(
+        [&](const int64_t src_i, const int64_t dst_i) {
+          dst.slice(dst_offsets[dst_i]).copy_from(src.slice(src_offsets[src_i]));
+        },
+        exec_mode::grain_size(512));
+  }
 }
 
 template<typename T>
@@ -301,11 +436,17 @@ inline void gather_group_to_group(const OffsetIndices<int> src_offsets,
                                   const Span<T> src,
                                   MutableSpan<T> dst)
 {
-  threading::parallel_for(selection.index_range(), 512, [&](const IndexRange range) {
-    for (const int dst_i : range) {
-      dst.slice(dst_offsets[dst_i]).copy_from(src.slice(src_offsets[selection[dst_i]]));
-    }
-  });
+  if constexpr (std::is_trivially_copyable_v<T>) {
+    detail::gather_group_to_group_trivial(
+        src_offsets, dst_offsets, selection, src.data(), dst.data(), sizeof(T));
+  }
+  else {
+    threading::parallel_for(selection.index_range(), 512, [&](const IndexRange range) {
+      for (const int dst_i : range) {
+        dst.slice(dst_offsets[dst_i]).copy_from(src.slice(src_offsets[selection[dst_i]]));
+      }
+    });
+  }
 }
 
 template<typename T>
@@ -328,9 +469,9 @@ inline void gather_to_groups(const OffsetIndices<int> dst_offsets,
                              const Span<T> src,
                              MutableSpan<T> dst)
 {
-  src_selection.foreach_index(
-      [&](const int src_i, const int dst_i) { dst.slice(dst_offsets[dst_i]).fill(src[src_i]); },
-      exec_mode::grain_size(1024));
+  using U = bytes_type::StaticType<T>;
+  detail::gather_to_groups_impl(
+      dst_offsets, src_selection, src.template cast<U>(), dst.template cast<U>());
 }
 
 void gather(GSpan src, Span<int> indices, const IndexMask &dst_mask, GMutableSpan dst);
@@ -386,7 +527,13 @@ void copy_group_to_group(OffsetIndices<int> src_offsets,
                          Span<T> src,
                          MutableSpan<T> dst)
 {
-  copy_group_to_group(src_offsets, dst_offsets, selection, GSpan(src), GMutableSpan(dst));
+  if constexpr (std::is_trivially_copyable_v<T>) {
+    detail::copy_group_to_group_trivial(
+        src_offsets, dst_offsets, selection, src.data(), dst.data(), sizeof(T));
+  }
+  else {
+    copy_group_to_group(src_offsets, dst_offsets, selection, GSpan(src), GMutableSpan(dst));
+  }
 }
 
 /**

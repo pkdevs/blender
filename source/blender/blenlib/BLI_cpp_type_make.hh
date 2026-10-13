@@ -10,6 +10,7 @@
 
 #include <sstream>
 
+#include "BLI_bytes_type.hh"
 #include "BLI_cpp_type.hh"
 #include "BLI_index_mask.hh"
 #include "BLI_unique_hash.hh"
@@ -334,13 +335,13 @@ inline std::atomic<int> type_index_counter{0};
 /**
  * The type used to instantiate callbacks that only deal with memory (construction, destruction,
  * copying, etc.). For trivial types, the same callbacks can be shared by all types with the same
- * #BytesType, which reduces binary size.
+ * #bytes_type::BytesType, which reduces binary size.
  */
 template<typename T, bool IsTrivial = std::is_trivial_v<T>> struct MemoryCallbackType {
   using type = T;
 };
 template<typename T> struct MemoryCallbackType<T, true> {
-  using type = BytesType<T>;
+  using type = bytes_type::BytesType<T>;
 };
 
 }  // namespace cpp_type_util

@@ -12,6 +12,7 @@
 
 #include "BLI_array_utils.hh"
 #include "BLI_bounds.hh"
+#include "BLI_bytes_type.hh"
 #include "BLI_index_mask.hh"
 #include "BLI_length_parameterize.hh"
 #include "BLI_listbase.hh"
@@ -1709,8 +1710,8 @@ void CurvesGeometry::reverse_curves(const IndexMask &curves_to_reverse)
     }
 
     GSpanAttributeWriter attribute = attributes.lookup_for_write_span(iter.name);
-    attribute.span.type().to_static_bytes_type([&]<typename T>() {
-      reverse_curve_point_data<T>(*this, curves_to_reverse, attribute.span.typed_for_bytes<T>());
+    attribute_math::to_static_bytes_type(attribute.span.type(), [&]<typename T>() {
+      reverse_curve_point_data<T>(*this, curves_to_reverse, bytes_type::typed<T>(attribute.span));
     });
     attribute.finish();
     return;
