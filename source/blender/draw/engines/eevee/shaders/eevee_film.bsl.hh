@@ -290,19 +290,22 @@ struct Film {
     return true;
   }
 
-  float2 panoramic_render_co_derivative(float2 film_co,
-                                        float2 render_co,
-                                        float2 axis,
-                                        ePanoramicFace view_id)
+  /* NOTE: Film offsets are in film pixels and render offsets are in render pixels of the subview.
+   * Samples are gathered in render pixels and weighted by the pixel filter in film pixels. */
+  float2 panoramic_render_offset_get(float2 film_co,
+                                     float2 render_co,
+                                     float2 film_offset,
+                                     ePanoramicFace view_id)
   {
     float2 neighbor_co;
-    if (panoramic_render_co_get(film_co + axis, view_id, neighbor_co)) {
+    if (panoramic_render_co_get(film_co + film_offset, view_id, neighbor_co)) {
       return neighbor_co - render_co;
     }
-    if (panoramic_render_co_get(film_co - axis, view_id, neighbor_co)) {
+    if (panoramic_render_co_get(film_co - film_offset, view_id, neighbor_co)) {
       return render_co - neighbor_co;
     }
-    return axis;
+    /* No neighbor can be projected onto the subview. Fallback to identity. */
+    return film_offset;
   }
 
   /* Returns false if the lens border is further than the filter radius. */
@@ -378,9 +381,9 @@ struct Film {
     panoramic_render_co_get(lens_co, view_id, footprint.render_co);
 
     /* Columns of the film to render pixel offset matrix. */
-    const float2 dx = panoramic_render_co_derivative(
+    const float2 dx = panoramic_render_offset_get(
         lens_co, footprint.render_co, float2(1.0f, 0.0f), view_id);
-    const float2 dy = panoramic_render_co_derivative(
+    const float2 dy = panoramic_render_offset_get(
         lens_co, footprint.render_co, float2(0.0f, 1.0f), view_id);
     const float determinant = dx.x * dy.y - dy.x * dx.y;
     /* The footprint of a film pixel on the subview is an ellipse.
