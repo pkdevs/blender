@@ -682,7 +682,7 @@ ObjectRef::ObjectRef(Object &ob, Object *dupli_parent, const VectorList<DupliObj
  *
  * The per object type toggles in the 3D viewport header, see: #159219.
  *
- * Users expect these toggles to apply to what they see, as if the instances were made real:
+ * Visibility applies to what users see, as if the instances were made real:
  * a cube instanced by an empty is still a mesh.
  * So instances are filtered by the type of the object they come from, not their instancer's.
  *
@@ -692,7 +692,8 @@ ObjectRef::ObjectRef(Object &ob, Object *dupli_parent, const VectorList<DupliObj
  * a text object is "Text" to the user whatever it evaluates to,
  * so hiding "Text" hides text objects and hiding "Mesh" doesn't.
  *
- * Selection also checks the instancer, since picking an instance selects it.
+ * Selectability applies to the object that gets selected,
+ * since picking an instance selects its instancer, the instance's own type isn't checked.
  *
  * Viewport Drawing
  * ----------------
@@ -704,8 +705,8 @@ ObjectRef::ObjectRef(Object &ob, Object *dupli_parent, const VectorList<DupliObj
  * ------------------
  *
  * - Anything hidden in the viewport can't be selected.
- * - An instance of an unselectable type can't be picked, clicks pass through it,
- *   so an empty can't be selected through its mesh instances.
+ * - An instance of an unselectable type can still be picked, selecting its instancer,
+ *   so an empty can be selected through its mesh instances with mesh selection disabled.
  * - An unselectable object (by type or the outliner toggle) isn't drawn for selection,
  *   nor are its instances since picking them would select it.
  *   So they never block clicks on objects behind them.
@@ -883,7 +884,7 @@ DrawFilter draw_filter_from_viewport_object_impl(const DRWContext &draw_ctx,
 
   /* The temporary object for a dupli takes its type from its data (a text's evaluated mesh is
    * `OB_MESH`), use the type of the object it instances so generated geometry follows its
-   * object's toggles. For what else it copies from that object and the instancer,
+   * object's visibility toggle. For what else it copies from that object and the instancer,
    * see #DEG_iterator_temp_object_from_dupli. */
   const ObjectType ob_type = (dupli != nullptr) ? dupli->ob->type : ob.type;
 
@@ -916,13 +917,12 @@ DrawFilter draw_filter_from_viewport_object_impl(const DRWContext &draw_ctx,
       }
     }
     else if (((ob.base_flag & BASE_SELECTABLE) == 0) ||
-             ((v3d.object_type_exclude_select & (1 << ob_type)) != 0))
+             ((dupli == nullptr) && ((v3d.object_type_exclude_select & (1 << ob.type)) != 0)))
     {
       /* Picking a dupli selects its instancer (they share a `select_id`),
        * so the duplis of an unselectable instancer are skipped too,
        * otherwise they block clicks on objects behind them.
-       * The same goes for a dupli of an unselectable type,
-       * clicking it used to select its instancer, see: #159219. */
+       * A dupli's own type isn't checked as it's the instancer that's selected. */
       return DrawFilter::SkipRecursive;
     }
   }

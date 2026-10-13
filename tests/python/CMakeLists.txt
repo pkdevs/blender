@@ -1887,7 +1887,7 @@ if(WITH_UI_TESTS)
     test_info_reports.test_info_report_delete
     test_info_reports.test_info_report_operator_poll
     test_object_type_visibility.visibility_by_own_type
-    test_object_type_visibility.selectability_by_own_type
+    test_object_type_visibility.selectability_by_instancer_type
     test_object_type_visibility.pose_bone_select_with_armature_unselectable
     test_object_type_visibility.edit_mode_element_select_with_type_unselectable
     test_object_type_visibility.generated_geometry_by_object_type

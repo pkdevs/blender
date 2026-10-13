@@ -8,8 +8,9 @@ This file does not run anything, its methods are accessed for tests by ``run_ble
 Drawing and select-picking with the object type visibility & selectability toggles
 in the 3D viewport header (the "Selectability & Visibility" settings), see: #159219.
 
-Objects and instances are filtered by the type of the object they come from,
-not the type of their instancer,
+Objects and instances are hidden by the type of the object they come from,
+not the type of their instancer.
+Selection checks the type of the object that's selected, for an instance that's its instancer,
 see the "Scene Iteration" notes in ``draw_context.cc``.
 
 Each test steps through toggle states, checking what's drawn and what's picked in each,
@@ -428,10 +429,11 @@ def visibility_by_own_type():
     yield from assert_points(colors=SCENE_COLORS, picks=SCENE_PICKS)
 
 
-def selectability_by_own_type():
+def selectability_by_instancer_type():
     """
-    Disabling selection of a type prevents picking the objects and instances of that type,
-    clicks pass through them to the object behind, see: #159219.
+    Disabling selection of a type prevents picking objects of that type and their instances,
+    clicks pass through them to the object behind.
+    An instance's own type isn't checked, picking it selects its instancer.
     Neither the type toggles nor the outliner's change what's drawn.
     """
     e, t, window, area = yield from _scene_setup()
@@ -449,14 +451,14 @@ def selectability_by_own_type():
     # Everything shown & selectable, the points hit what they're named for.
     yield from assert_points(picks=SCENE_PICKS)
 
-    # Disabling "Mesh" selection: the cube instance passes clicks through to the bone behind.
+    # Disabling "Mesh" selection: the cube instance still picks the empty.
     # The plane can't be picked, nor can its bone instances, an unselectable instancer skips them.
     yield from _show_object_reset(space, disable={"select_mesh"})
-    yield from assert_points(picks=SCENE_PICKS | {"cube": "Bone Behind", "plane": None, "bone_instance": None})
+    yield from assert_points(picks=SCENE_PICKS | {"plane": None, "bone_instance": None})
 
-    # Disabling "Armature" selection: the bones & the bone instances can't be picked, the plane instancing them can.
+    # Disabling "Armature" selection: the bone behind can't be picked, the bone instances still pick the plane.
     yield from _show_object_reset(space, disable={"select_armature"})
-    yield from assert_points(picks=SCENE_PICKS | {"bone_behind": None, "bone_instance": None})
+    yield from assert_points(picks=SCENE_PICKS | {"bone_behind": None})
 
     # Disabling "Empty" selection: the empty & its cube instance pass clicks through to the bone behind.
     yield from _show_object_reset(space, disable={"select_empty"})
@@ -480,13 +482,13 @@ def selectability_by_own_type():
     yield from _show_object_reset(space, disable={"viewport_empty", "select_empty"})
     yield from assert_points(picks=SCENE_PICKS | {"cube": "Bone Behind"})
 
-    # Simulated clicks instead of the select operator: "Mesh" selection disabled picks the bone behind.
-    yield from _show_object_reset(space, disable={"select_mesh"})
+    # Simulated clicks instead of the select operator: "Empty" selection disabled picks the bone behind.
+    yield from _show_object_reset(space, disable={"select_empty"})
     yield from _view3d_click_at(e, area, INSTANCE_PICK_CO)
     t.assertEqual(_selected_name(t, window), "Bone Behind")
     yield from _deselect_all(window, area)
 
-    # "Mesh" selection enabled again picks the instancer.
+    # "Empty" selection enabled again picks the instancer.
     yield from _show_object_reset(space)
     yield from _view3d_click_at(e, area, INSTANCE_PICK_CO)
     t.assertEqual(_selected_name(t, window), "Instancer")
@@ -699,9 +701,9 @@ def _light_instancer_add(window, area):
 
 def instanced_light_by_own_type():
     """
-    A light instanced by an empty is filtered by its own type for selection.
+    A light instanced by an empty is hidden by its own type, its selection by the empty's type.
     Lights are drawn as overlay extras, a different draw path from geometry.
-    They have no fill color to read, so only picking with the selection toggles is checked.
+    They have no fill color to read, so only picking is checked.
     """
     e, t, window, area = yield from _scene_setup()
     space = area.spaces.active
@@ -714,9 +716,13 @@ def instanced_light_by_own_type():
     # Everything shown & selectable, picking the light selects the empty.
     yield from assert_picks(picks={"light": "Light Instancer"})
 
-    # Disabling "Light" selection: the light can't be picked.
-    yield from _show_object_reset(space, disable={"select_light"})
+    # Hiding "Light": the light can't be picked.
+    yield from _show_object_reset(space, disable={"viewport_light"})
     yield from assert_picks(picks={"light": None})
+
+    # Disabling "Light" selection: picking the light still selects the empty.
+    yield from _show_object_reset(space, disable={"select_light"})
+    yield from assert_picks(picks={"light": "Light Instancer"})
 
     # Disabling "Empty" selection: the instancer skips its instances, so the light can't be picked either.
     yield from _show_object_reset(space, disable={"select_empty"})
@@ -773,7 +779,8 @@ def _nested_instancer_add(window, area):
 
 def nested_instances_by_own_type():
     """
-    Nesting doesn't change the rule, each instance is filtered by its own type.
+    Nesting doesn't change the rule, each instance is hidden by its own type
+    and its selection depends on its instancer's type.
     The dupli-list flattens the nesting so the empty is the instancer of the nested plane
     and the bones it instances alike, picking any of them selects the empty.
     """
@@ -803,13 +810,9 @@ def nested_instances_by_own_type():
     yield from _show_object_reset(space, disable={"select_empty"})
     yield from assert_points(colors=NESTED_COLORS, picks={"plane": None, "bone": None})
 
-    # Disabling "Mesh" selection: the plane can't be picked, the bones can.
-    yield from _show_object_reset(space, disable={"select_mesh"})
-    yield from assert_points(colors=NESTED_COLORS, picks=NESTED_PICKS | {"plane": None})
-
-    # Disabling "Armature" selection: the bones can't be picked, the plane can.
-    yield from _show_object_reset(space, disable={"select_armature"})
-    yield from assert_points(colors=NESTED_COLORS, picks=NESTED_PICKS | {"bone": None})
+    # Disabling "Mesh" & "Armature" selection: the plane & bones still pick the empty.
+    yield from _show_object_reset(space, disable={"select_mesh", "select_armature"})
+    yield from assert_points(colors=NESTED_COLORS, picks=NESTED_PICKS)
 
     # Re-enabling everything restores the initial state.
     yield from _show_object_reset(space)
