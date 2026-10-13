@@ -121,6 +121,8 @@ void RealizeOnDomainOperation::realize_on_domain_gpu(const float3x3 &itransform)
   Result &input = this->get_input();
   const RealizationOptions &realization_options = input.get_realization_options();
 
+  const float2 wh = math::fast_hypot(float2x2(itransform));
+
   const char *shader_name;
   bool use_bilinear = false;
   bool use_texels = false;
@@ -133,9 +135,15 @@ void RealizeOnDomainOperation::realize_on_domain_gpu(const float3x3 &itransform)
         shader_name = "compositor_realize_on_domain_bspline_float4";
         use_bilinear = use_texels = true;
         break;
-      default:
-        shader_name = "compositor_realize_on_domain_box_float4";
-        use_bilinear = use_texels = true;
+      default: /* Interpolation::Box */
+        use_bilinear = true;
+        if (wh.x < 1.1f && wh.y < 1.1f) {
+          shader_name = "compositor_realize_on_domain_float4";
+        }
+        else {
+          shader_name = "compositor_realize_on_domain_box_float4";
+          use_texels = true;
+        }
         break;
     }
   }
@@ -185,9 +193,8 @@ void RealizeOnDomainOperation::realize_on_domain_gpu(const float3x3 &itransform)
   transformation = math::translate(transformation, float2(0.5f));
 
   GPU_shader_uniform_mat3_as_mat4(shader, "transformation", transformation.ptr());
-  const float2x2 jacobian(transformation);
 
-  GPU_shader_uniform_2fv(shader, "wh", math::fast_hypot(jacobian));
+  GPU_shader_uniform_2fv(shader, "wh", wh);
 
   GPU_texture_filter_mode(input, use_bilinear);
 
