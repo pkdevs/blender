@@ -46,44 +46,21 @@ void RealizeOnDomainOperation::execute()
    * from the data space to the display space, then subtracting the center of the display window to
    * go from the display space to the virtual compositing space. See the corrective translation
    * function for more information on its function. */
-  float2 input_translation = float2(input_domain.data_offset) -
-                             float2(input_domain.display_size) / 2.0f;
-
-  if (get_input().get_realization_options().interpolation == Interpolation::Nearest) {
-    /* Bias translations in case of nearest interpolation to avoids the round-to-even behavior of
-     * some GPUs at pixel boundaries. */
-    /* todo: this may not be necessary any more. Try 1/2 pixel translations on various gpus. */
-    input_translation += std::numeric_limits<float>::epsilon() * 10e3f;
-  }
-  else {
-    /* Assuming no transformations, if the input size is odd and output size is even or vice versa,
-     * the centers of pixels of the input and output will be half a pixel away from each other due
-     * to the centering translation. Which introduce fuzzy result due to interpolation. So if one
-     * is odd and the other is even, detected by testing the low bit of the xor of the sizes, shift
-     * the input by 1/2 pixel so the pixels align. */
-    /* todo: it seems like this should use display_size, but that breaks existing tests. */
-    const int2 output_size = output_domain.data_size;
-    const int2 input_size = input_domain.data_size;
-    if ((input_size.x ^ output_size.x) & 1) {
-      input_translation.x -= 0.5f;
-    }
-    if ((input_size.y ^ output_size.y) & 1) {
-      input_translation.y -= 0.5f;
-    }
-  }
-
+  const float2 input_center = float2(input_domain.display_size) / 2.0f;
+  const float2 input_translation = float2(input_domain.data_offset) - input_center +
+                                   this->compute_corrective_translation();
   const float3x3 input_data_to_virtual = math::translate(input_domain.transformation,
                                                          input_translation);
 
   /* Same as above but for the output domain. */
-  const float2 output_translation = float2(output_domain.data_offset) -
-                                    float2(output_domain.display_size) / 2.0f;
+  const float2 output_center = float2(output_domain.display_size) / 2.0f;
+  const float2 output_translation = float2(output_domain.data_offset) - output_center;
   const float3x3 output_data_to_virtual = math::translate(output_domain.transformation,
                                                           output_translation);
 
   /* Create a transformation matrix from the output data space to the input data space */
-  const float3x3 output_data_to_input_data = math::invert(input_data_to_virtual) *
-                                             output_data_to_virtual;
+  const float3x3 virtual_to_input_data = math::invert(input_data_to_virtual);
+  const float3x3 output_data_to_input_data = virtual_to_input_data * output_data_to_virtual;
 
   this->get_result().allocate_texture(output_domain);
 
@@ -93,6 +70,50 @@ void RealizeOnDomainOperation::execute()
   else {
     this->realize_on_domain_cpu(output_data_to_input_data);
   }
+}
+
+float2 RealizeOnDomainOperation::compute_corrective_translation()
+{
+  if (this->get_input().get_realization_options().interpolation == Interpolation::Nearest) {
+    /* Bias translations in case of nearest interpolation to avoids the round-to-even behavior of
+     * some GPUs at pixel boundaries. */
+    return float2(std::numeric_limits<float>::epsilon() * 10e3f);
+  }
+
+  /* Assuming no transformations, if the input size is odd and output size is even or vice versa,
+   * the centers of pixels of the input and output will be half a pixel away from each other due
+   * to the centering translation. Which introduce fuzzy result due to interpolation. So if one
+   * is odd and the other is even, detected by testing the low bit of the xor of the sizes, shift
+   * the input by 1/2 pixel so the pixels align. */
+  const int2 output_size = this->compute_domain().data_size;
+  const int2 input_size = this->get_input().domain().data_size;
+  return float2(((input_size[0] ^ output_size[0]) & 1) ? -0.5f : 0.0f,
+                ((input_size[1] ^ output_size[1]) & 1) ? -0.5f : 0.0f);
+}
+
+std::optional<float2x2> RealizeOnDomainOperation::compute_jacobian(const float3x3 &transformation)
+{
+  /* The Jacobian of a 2D transformation matrix is the matrix itself. */
+  const float2x2 jacobian = float2x2(transformation);
+
+  /* The gradients of the input across the output are the rows of the Jacobian. */
+  const float2 x_gradient = float2(jacobian[0][0], jacobian[1][0]);
+  const float2 y_gradient = float2(jacobian[0][1], jacobian[1][1]);
+
+  /* Compute the size of the input pixels in normalized space. */
+  const float2 pixel_size = math::rcp(float2(this->get_input().domain().data_size));
+
+  /* If both gradients are less than that the input pixel size with a tolerance ratio of 1.1, then
+   * each output pixel does not cover multiple input pixels and we can do simple point sampling,
+   * otherwise, each output pixel covers multiple input pixels and we do area sampling. */
+  constexpr float tolerance_ratio = 1.1f;
+  if (math::length(x_gradient) < pixel_size.x * tolerance_ratio &&
+      math::length(y_gradient) < pixel_size.y * tolerance_ratio)
+  {
+    return std::nullopt;
+  }
+
+  return jacobian;
 }
 
 void RealizeOnDomainOperation::realize_on_domain_gpu(const float3x3 &itransform)
@@ -188,9 +209,11 @@ void RealizeOnDomainOperation::realize_on_domain_gpu(const float3x3 &itransform)
 }
 
 template<typename T>
-static void realize_on_domain(const Result &input, Result &output, const float3x3 &transformation)
+static void realize_on_domain(const Result &input,
+                              Result &output,
+                              const float3x3 &transformation,
+                              const std::optional<float2x2> &jacobian)
 {
-  const float2x2 jacobian(transformation);
   const RealizationOptions &realization_options = input.get_realization_options();
   parallel_for(output.domain().data_size, [&](const int2 texel) {
     const float2 coordinates = math::transform_point(transformation, float2(texel));
@@ -215,6 +238,8 @@ void RealizeOnDomainOperation::realize_on_domain_cpu(const float3x3 &itransform)
   /* Transform from texel centers rather than corners */
   transformation = math::translate(transformation, float2(0.5f));
 
+  const std::optional<float2x2> jacobian = this->compute_jacobian(transformation);
+
   input.get_cpp_type()
       .to_static_type<float,
                       float2,
@@ -229,7 +254,7 @@ void RealizeOnDomainOperation::realize_on_domain_cpu(const float3x3 &itransform)
                       float4x4,
                       nodes::MenuValue,
                       math::Quaternion>(
-          [&]<typename T>() { realize_on_domain<T>(input, output, transformation); });
+          [&]<typename T>() { realize_on_domain<T>(input, output, transformation, jacobian); });
 }
 
 Domain RealizeOnDomainOperation::compute_domain()
