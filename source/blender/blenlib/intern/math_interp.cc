@@ -9,6 +9,11 @@
 #include <cmath>
 #include <cstring>
 
+/* This is to prevent out-of-order instantiation of templates before any
+ * specializations are defined.
+ */
+#define MATH_INTERP_CC 1
+
 #include "BLI_math_base.hh"
 #include "BLI_math_base_c.hh"
 #include "BLI_math_interp.hh"

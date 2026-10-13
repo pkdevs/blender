@@ -521,8 +521,8 @@ struct Sampler2D {
  */
 template<enum Sampler sampler>
 extern float4 sample_rect(const Sampler2D &, const float2 &uv, const float2 &wh);
-template<> float4 sample_rect<Sampler::Box>(const Sampler2D &, const float2 &uv, const float2 &wh);
 
+#ifndef MATH_INTERP_CC
 BLI_INLINE void interpolate_box_wrapmode_fl(const float *buffer,
                                             float *output,
                                             int width,
@@ -552,6 +552,7 @@ BLI_INLINE void interpolate_cubic_bspline_wrapmode_fl(const float *buffer,
       Sampler2D{buffer, width, height, components, wrap_u, wrap_v}, uv, wh);
   memcpy(output, &v, components * sizeof(float));
 }
+#endif
 
 }  // namespace math
 
