@@ -99,7 +99,7 @@ int encodeToFile(const char *filename,
     return result;
   }
 
-  /* `ktxTexture2_CompressBasisEx()` always writes BT709 primaries, regardless of the source
+  /* `ktxTexture2_Create()` always writes BT709 primaries, regardless of the source
    * VkFormat. KHR_texture_basisu requires UNSPECIFIED primaries for non-color data (normal
    * maps, etc.), so force it back for `is_data` textures. */
   if (is_data) {
