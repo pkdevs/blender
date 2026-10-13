@@ -1,9 +1,9 @@
 
 msgid ""
 msgstr ""
-"Project-Id-Version: Blender 5.3.0 Alpha (b'c02032f9693d')\n"
+"Project-Id-Version: Blender 5.3.0 Alpha (b'2cef5b8c951a')\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-10-05 07:25+0000\n"
+"POT-Creation-Date: 2026-09-14 07:47+0000\n"
 "PO-Revision-Date: 2026-06-02 05:12+0000\n"
 "Last-Translator: Fadli Birdie Zeinda <justbirdie00@gmail.com>\n"
 "Language-Team: Indonesian <https://translate.blender.org/projects/blender-ui/ui/id/>\n"
@@ -3659,14 +3659,6 @@ msgid "Collection of worlds"
 msgstr "Koleksi dunia"
 
 
-msgid "Project"
-msgstr "Proyek"
-
-
-msgid "Blender"
-msgstr "Blender"
-
-
 msgid "Blendfile Import Context"
 msgstr "Konteks Impor Berkasblend"
 
@@ -3742,10 +3734,6 @@ msgstr "Sumber Pustaka"
 
 msgid "Dirty"
 msgstr "Kotor"
-
-
-msgid "Path"
-msgstr "Jalur"
 
 
 msgid "Blender RNA"
@@ -5585,10 +5573,6 @@ msgid "Check if extend lines collide with strokes"
 msgstr "Periksa apakah garis yang terekstensi bertabrakan dengan sapuan"
 
 
-msgid "Cyclic"
-msgstr "Siklik"
-
-
 msgid "Affect Position"
 msgstr "Mempengaruhi Posisi"
 
@@ -7338,6 +7322,10 @@ msgid "Target Object (Curves only)"
 msgstr "Target Objek (Kurva saja)"
 
 
+msgid "Cyclic"
+msgstr "Siklik"
+
+
 msgid "Copy Location Constraint"
 msgstr "Salin Pembatas Lokasi"
 
@@ -7993,6 +7981,10 @@ msgstr "Jarak Proyeksi"
 
 msgid "Nearest Surface Point"
 msgstr "Titik Permukaan Terdekat"
+
+
+msgid "Project"
+msgstr "Proyek"
 
 
 msgid "Shrink the location to the nearest target surface along a given axis"
@@ -12553,6 +12545,10 @@ msgid "Map Taper"
 msgstr "Tipe"
 
 
+msgid "Path"
+msgstr "Jalur"
+
+
 msgid "Follow"
 msgstr "Ikuti"
 
@@ -15006,6 +15002,22 @@ msgid "Type of event"
 msgstr "Jenis acara"
 
 
+msgid "Press"
+msgstr "Pencet"
+
+
+msgid "Release"
+msgstr "Lepas"
+
+
+msgid "Click"
+msgstr "Klik"
+
+
+msgid "Double Click"
+msgstr "Klik Dua Kali"
+
+
 msgid "KeyMap Items"
 msgstr "Item PetaKunci"
 
@@ -15664,104 +15676,104 @@ msgid "Use Material Mask"
 msgstr "Gunakan Masker Bahan"
 
 
-msgid "Utilities"
-msgstr "Utilitas"
-
-
-msgid "Metaball"
-msgstr "Metabola"
-
-
-msgid "Snap"
-msgstr "Jepret"
-
-
 msgid "Sample"
 msgstr "Sampel"
-
-
-msgid "Light Probe"
-msgstr "Probe Cahaya"
-
-
-msgid "Light"
-msgstr "Cahaya"
-
-
-msgid "Mirror"
-msgstr "Cermin"
-
-
-msgid "Apply"
-msgstr "Tetapkan"
-
-
-msgid "Merge"
-msgstr "Menggabungkan"
-
-
-msgid "Tracking"
-msgstr "Pelacakan"
-
-
-msgid "Names"
-msgstr "Nama"
-
-
-msgid "Assign Material"
-msgstr "Tugaskan Bahan"
-
-
-msgid "Select Linked"
-msgstr "Seleksi yang Terhubung"
-
-
-msgid "Hooks"
-msgstr "Kait"
-
-
-msgid "UV"
-msgstr "UV"
-
-
-msgid "Math"
-msgstr "Matematika"
-
-
-msgid "Asset"
-msgstr "Aset"
-
-
-msgid "Navigation"
-msgstr "Navigasi"
-
-
-msgid "Import"
-msgstr "Impor"
-
-
-msgid "Linked"
-msgstr "Terkoleksi"
-
-
-msgid "Track"
-msgstr "Lacak"
-
-
-msgid "Add Image"
-msgstr "Tambah Gambar"
-
-
-msgid "Instances"
-msgstr "Contoh-contoh"
 
 
 msgid "Gizmo"
 msgstr "Gizmo"
 
 
+msgid "Snap"
+msgstr "Jepret"
+
+
+msgid "Instances"
+msgstr "Contoh-contoh"
+
+
+msgid "Import"
+msgstr "Impor"
+
+
+msgid "Utilities"
+msgstr "Utilitas"
+
+
+msgid "Math"
+msgstr "Matematika"
+
+
+msgid "UV"
+msgstr "UV"
+
+
+msgid "Mirror"
+msgstr "Cermin"
+
+
+msgid "Navigation"
+msgstr "Navigasi"
+
+
+msgid "Select Linked"
+msgstr "Seleksi yang Terhubung"
+
+
+msgid "Assign Material"
+msgstr "Tugaskan Bahan"
+
+
+msgid "Metaball"
+msgstr "Metabola"
+
+
+msgid "Light"
+msgstr "Cahaya"
+
+
+msgid "Light Probe"
+msgstr "Probe Cahaya"
+
+
+msgid "Linked"
+msgstr "Terkoleksi"
+
+
 msgid "Layout"
 msgstr "Tata Letak"
+
+
+msgid "Add Image"
+msgstr "Tambah Gambar"
+
+
+msgid "Apply"
+msgstr "Tetapkan"
+
+
+msgid "Track"
+msgstr "Lacak"
+
+
+msgid "Asset"
+msgstr "Aset"
+
+
+msgid "Tracking"
+msgstr "Pelacakan"
+
+
+msgid "Hooks"
+msgstr "Kait"
+
+
+msgid "Names"
+msgstr "Nama"
+
+
+msgid "Merge"
+msgstr "Menggabungkan"
 
 
 msgid "Animals"
@@ -15901,6 +15913,10 @@ msgstr "Buka Bahasa Bayangan"
 
 msgid "Python"
 msgstr "Python"
+
+
+msgid "Blender"
+msgstr "Blender"
 
 
 msgid "System"
@@ -17563,6 +17579,18 @@ msgid "Distance between two bundles used for object scaling"
 msgstr "Jarak antar dua bundel digunakan untuk penskalaan objek"
 
 
+msgid "Fastest"
+msgstr "Tercepat"
+
+
+msgid "Double"
+msgstr "Dua Kali Lipat"
+
+
+msgid "Quarter"
+msgstr "Seperempat"
+
+
 msgid "Use Mask"
 msgstr "Gunakan Masker"
 
@@ -18555,11 +18583,6 @@ msgid "3D double vector"
 msgstr "Vektor double 3D"
 
 
-msgctxt "Volume"
-msgid "Integer Vector"
-msgstr "Vektor Integer"
-
-
 msgid "3D integer vector"
 msgstr "Vektor integer 3D"
 
@@ -18582,10 +18605,6 @@ msgstr "Menerjemahkan Contoh-contoh"
 
 msgid "Warning"
 msgstr "Peringatan"
-
-
-msgid "Comment"
-msgstr "Komen"
 
 
 msgid "Label Font Size"
@@ -21820,10 +21839,6 @@ msgid "Zoom in/out the background image"
 msgstr "Gambar Latar"
 
 
-msgid "Use Active"
-msgstr "Gunakan Aktif"
-
-
 msgid "Detach selected nodes from parents"
 msgstr "Hapus Titik"
 
@@ -22807,6 +22822,10 @@ msgstr "ID Lama"
 msgctxt "Operator"
 msgid "Rename"
 msgstr "Ganti Nama"
+
+
+msgid "Use Active"
+msgstr "Gunakan Aktif"
 
 
 msgid "Reset"
@@ -23997,17 +24016,24 @@ msgid "Add a modifier to the strip"
 msgstr "Tambah pengubah ke strip"
 
 
+msgid "Graphs"
+msgstr "Grafik"
+
+
+msgid "Unique"
+msgstr "Unik"
+
+
 msgid "One unique graphical definition"
 msgstr "Satu definisi grafikal unik"
 
 
-msgctxt "Sequence"
-msgid "Double"
-msgstr "Ganda"
-
-
 msgid "Graphical definition in 2 sections"
 msgstr "Definisi grafikal di 2 sesi"
+
+
+msgid "Triplet"
+msgstr "Tiga Serangkai"
 
 
 msgctxt "Operator"
@@ -24156,6 +24182,10 @@ msgstr "Tipe"
 
 msgid "Add or remove comments"
 msgstr "Tambah atau hapus komen"
+
+
+msgid "Comment"
+msgstr "Komen"
 
 
 msgid "Un-Comment"
@@ -25852,6 +25882,10 @@ msgid "Save Preferences"
 msgstr "Simpan Pengaturan"
 
 
+msgid "Auto Run Python Scripts"
+msgstr "Jalankan Script Python secara Otomatis"
+
+
 msgid "Blend Files"
 msgstr "Berkas Blend"
 
@@ -26118,10 +26152,6 @@ msgstr "Berkas-dokumen Terbaru"
 
 msgid "Load user interface setup when loading .blend files"
 msgstr "Muat setup antarmuka pengguna saat memuat dokumen .blend"
-
-
-msgid "Auto Run Python Scripts"
-msgstr "Jalankan Script Python secara Otomatis"
 
 
 msgid "3D Mouse Navigation Mode"
@@ -27455,6 +27485,11 @@ msgstr "Tunggal"
 
 
 msgctxt "Sequence"
+msgid "Double"
+msgstr "Ganda"
+
+
+msgctxt "Sequence"
 msgid "Clock"
 msgstr "Jam"
 
@@ -27933,6 +27968,11 @@ msgid "Node ID"
 msgstr "ID Simpul"
 
 
+msgctxt "Volume"
+msgid "Integer Vector"
+msgstr "Vektor Integer"
+
+
 msgid "Active Grid Index"
 msgstr "Indeks Grid Aktif"
 
@@ -27947,14 +27987,6 @@ msgstr "Render Volume"
 
 msgid "Jump Height"
 msgstr "Tinggi Lompatan"
-
-
-msgid "Press"
-msgstr "Pencet"
-
-
-msgid "Release"
-msgstr "Lepas"
 
 
 msgid "3D pose action, representing a controller's location and rotation"
@@ -29136,6 +29168,10 @@ msgstr "Kunci yang Tidak Terpakai"
 msgctxt "Operator"
 msgid "Copy All Materials to Selected"
 msgstr "Salin Semua Material ke Terpilih"
+
+
+msgid "Flip Colors"
+msgstr "Balik Warna"
 
 
 msgid "Clip Image"
@@ -30635,10 +30671,6 @@ msgid "Sharp Edges"
 msgstr "Semua Tampilan"
 
 
-msgid "Scale Thickness"
-msgstr "Ketebalan Skala"
-
-
 msgctxt "Operator"
 msgid "Plane"
 msgstr "Kamera"
@@ -30826,6 +30858,10 @@ msgstr "Bidang-bidang Datar"
 msgctxt "Operator"
 msgid "Arrange"
 msgstr "Mengatur"
+
+
+msgid "Scale Thickness"
+msgstr "Ketebalan Skala"
 
 
 msgctxt "Operator"
@@ -31037,6 +31073,11 @@ msgstr "Cat Multi"
 
 
 msgctxt "Operator"
+msgid "Quick Edit"
+msgstr "Sunting Cepat"
+
+
+msgctxt "Operator"
 msgid "Apply"
 msgstr "Setujui"
 
@@ -31047,10 +31088,6 @@ msgstr "Tipe Mengedit"
 
 msgid "%sAction"
 msgstr "%sAksi"
-
-
-msgid "annotations"
-msgstr "anotasi-anotasi"
 
 
 msgid "Documents"
@@ -31092,6 +31129,10 @@ msgstr "Untitled"
 
 msgid "True Normal"
 msgstr "Normal Sesungguhnya"
+
+
+msgid "annotations"
+msgstr "anotasi-anotasi"
 
 
 msgid "Basis"
@@ -33513,8 +33554,16 @@ msgid "Don't Save"
 msgstr "Jangan Disimpan"
 
 
+msgid "Enable scripts"
+msgstr "Mengaktifkan skrip"
+
+
 msgid "unable to open the file"
 msgstr "tidak dapat membuka dokumen"
+
+
+msgid "Permanently allow execution of scripts"
+msgstr "Memperbolehkan eksekusi skrip secara permanen"
 
 
 msgid "Save changes before closing?"

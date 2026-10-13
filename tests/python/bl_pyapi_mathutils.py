@@ -1233,7 +1233,7 @@ class KDTreeTesting(unittest.TestCase):
             k.find((0,) * 3, filter=lambda i: None)
 
 
-class TessellatePolygon(unittest.TestCase):
+class TesselatePolygon(unittest.TestCase):
     def test_empty(self):
         self.assertEqual([], geometry.tessellate_polygon([]))
 

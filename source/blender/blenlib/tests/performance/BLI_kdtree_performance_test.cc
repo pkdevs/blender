@@ -490,8 +490,6 @@ TEST(kdtree_performance, CalcDuplicates)
             });
 }
 
-/** \} */
-
 /* -------------------------------------------------------------------- */
 /** \name Threaded Build
  * \{ */
@@ -679,10 +677,6 @@ TEST(kdtree_performance, TinyTreesCalcDuplicates)
 }
 
 /** \} */
-
-/* -------------------------------------------------------------------- */
-/** \name Leaf Size
- * \{ */
 
 TEST(kdtree_performance, KDTreeNewLeafSize)
 {

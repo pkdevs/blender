@@ -8,7 +8,7 @@
  * Overlay shaders for all gsplat-related overlay draws: viewer attribute, outline prepass,
  * depth-only, edit vertices, and wireframe.
  *
- * \note Many of the fragment shaders here are duplicates or partial reimplementations of GLSL
+ * \note Many of the fragment shaders here are duplicates or partial reimplementations of glsl
  *       shaders. These can be deduplicated during the BSL-porting of the overlay shaders.
  */
 
@@ -23,17 +23,23 @@
 
 #include "draw_gsplat_lib.bsl.hh"
 #include "draw_model.bsl.hh"
-#include "draw_pointcloud.bsl.hh"
+#include "draw_pointcloud_lib.glsl"
 #include "draw_view.bsl.hh"
+#include "draw_view_clipping_lib.glsl"
 
 #include "select_lib.bsl.hh"
 
-#include "overlay_common.bsl.hh"
+#include "overlay_common_lib.glsl"
 #include "overlay_shader_shared.hh"
 
 namespace overlay {
 
 struct PipelineResources {
+  [[legacy_info]] ShaderCreateInfo drw_clipped;
+
+  /** WORKAROUND: This exact compilation constant is checked in Metal backend to enable clip
+   * distances. */
+  [[compilation_constant]] bool use_clipping;
   [[compilation_constant]] bool selectable;
 };
 
@@ -54,17 +60,19 @@ struct FragOut {
 
 [[vertex]] void vert([[resource_table]] const PipelineResources &pipe,
                      [[resource_table]] const Resources &srt,
-                     [[resource_table]] const Clipping &clip,
                      [[resource_table]] const draw::gsplat::ShapeResource &shape,
                      [[resource_table]] const draw::Model &models,
                      [[resource_table]] const draw::Infos & /* infos */,
                      [[resource_table]] const draw::View &views,
                      [[resource_table]] const draw::Resource &res_id,
+                     [[instance_id]] const int /*inst_id*/,     /* Used by model_lib. */
+                     [[base_instance]] const int /*base_inst*/, /* Used by model_lib. */
                      [[vertex_id]] const int vert_id,
                      [[instance_index]] const int inst_index,
                      [[position]] float4 &out_position,
                      [[point_size]] float &out_pointsize,
-                     [[clip_distance, condition(use_clipping)]] float (&clip_distances)[6],
+                     [[clip_distance,
+                       condition(use_clipping)]] float (&)[6], /* Used by `view_clipping_lib`. */
                      [[out]] VertOut &v_out)
 {
   draw::ID id = res_id.get(inst_index);
@@ -82,16 +90,10 @@ struct FragOut {
 
   out_position = gs.hP;
   out_pointsize = srt.uniform_buf.sizes.vert * 2.0f;
-  v_out.final_color = draw::pointcloud::get_customdata_vec4(int(gs.id), srt.attribute_tx);
+  v_out.final_color = pointcloud::get_customdata_vec4(int(gs.id), srt.attribute_tx);
 
-  if (clip.constants.use_clipping) [[static_branch]] {
-    clip.set_clipping_distances(gs.wP,
-                                clip_distances[0],
-                                clip_distances[1],
-                                clip_distances[2],
-                                clip_distances[3],
-                                clip_distances[4],
-                                clip_distances[5]);
+  if (pipe.use_clipping) [[static_branch]] {
+    view_clipping_distances(gs.wP);
   }
 }
 
@@ -194,23 +196,24 @@ void wire_object_color_get(float3 &rim_col,
 
 }  // namespace detail
 
-[[vertex]] void vert([[resource_table]] const PipelineResources &pipe,
-                     [[resource_table]] const Resources &srt,
-                     [[resource_table]] const draw::gsplat::ShapeResource &shape,
-                     [[resource_table]] const draw::Model &models,
-                     [[resource_table]] const draw::Infos &infos,
-                     [[resource_table]] const draw::View &views,
-                     [[resource_table, condition(selectable)]] const draw::Select & /* select */,
-                     [[resource_table, condition(!selectable)]] const draw::Resource &res_id,
-                     [[resource_table,
-                       condition(selectable)]] const draw::ResourceCustomID &custom_id,
-                     [[vertex_id]] const int vert_id,
-                     [[instance_index]] const int inst_index,
-                     [[position]] float4 &out_position,
-                     [[point_size]] float &out_pointsize,
-                     [[resource_table]] const Clipping &clip,
-                     [[clip_distance, condition(use_clipping)]] float (&clip_distances)[6],
-                     [[out]] VertOut &v_out)
+[[vertex]] void vert(
+    [[resource_table]] const PipelineResources &pipe,
+    [[resource_table]] const Resources &srt,
+    [[resource_table]] const draw::gsplat::ShapeResource &shape,
+    [[resource_table]] const draw::Model &models,
+    [[resource_table]] const draw::Infos &infos,
+    [[resource_table]] const draw::View &views,
+    [[resource_table, condition(selectable)]] const draw::Select & /* select */,
+    [[resource_table, condition(selectable == 0)]] const draw::Resource &res_id,
+    [[resource_table, condition(selectable)]] const draw::ResourceCustomID &custom_id,
+    [[instance_id]] const int /*inst_id*/,     /* Used by model_lib. */
+    [[base_instance]] const int /*base_inst*/, /* Used by model_lib. */
+    [[vertex_id]] const int vert_id,
+    [[instance_index]] const int inst_index,
+    [[position]] float4 &out_position,
+    [[point_size]] float &out_pointsize,
+    [[clip_distance, condition(use_clipping)]] float (&)[6], /* Used by `view_clipping_lib`. */
+    [[out]] VertOut &v_out)
 {
   draw::ID id;
   if (pipe.selectable) [[static_branch]] {
@@ -250,14 +253,8 @@ void wire_object_color_get(float3 &rim_col,
   v_out.final_color = float4(wire_col * srt.wire_opacity, srt.wire_opacity);
   v_out.final_color_inner = float4(rim_col * srt.wire_opacity, srt.wire_opacity);
 
-  if (clip.constants.use_clipping) [[static_branch]] {
-    clip.set_clipping_distances(gs.wP,
-                                clip_distances[0],
-                                clip_distances[1],
-                                clip_distances[2],
-                                clip_distances[3],
-                                clip_distances[4],
-                                clip_distances[5]);
+  if (pipe.use_clipping) [[static_branch]] {
+    view_clipping_distances(gs.wP);
   }
 }
 
@@ -309,12 +306,14 @@ struct FragOut {
                      [[resource_table]] const draw::Resource &res_id,
                      [[resource_table]] const draw::Model &models,
                      [[resource_table]] const draw::View &views,
+                     [[instance_id]] const int /*inst_id*/,     /* Used by model_lib. */
+                     [[base_instance]] const int /*base_inst*/, /* Used by model_lib. */
                      [[vertex_id]] const int vert_id,
                      [[instance_index]] const int inst_index,
                      [[position]] float4 &out_position,
                      [[point_size]] float &out_pointsize,
-                     [[resource_table]] const Clipping &clip,
-                     [[clip_distance, condition(use_clipping)]] float (&clip_distances)[6],
+                     [[clip_distance,
+                       condition(use_clipping)]] float (&)[6], /* Used by `view_clipping_lib`. */
                      [[out]] VertOut &v_out)
 {
   draw::ID id = res_id.get(inst_index);
@@ -342,14 +341,8 @@ struct FragOut {
 
   v_out.final_color = srt.uniform_buf.colors.vert_select;
 
-  if (clip.constants.use_clipping) [[static_branch]] {
-    clip.set_clipping_distances(wP,
-                                clip_distances[0],
-                                clip_distances[1],
-                                clip_distances[2],
-                                clip_distances[3],
-                                clip_distances[4],
-                                clip_distances[5]);
+  if (pipe.use_clipping) [[static_branch]] {
+    view_clipping_distances(wP);
   }
 }
 
@@ -380,21 +373,20 @@ struct VertOut {
   [[flat]] uint select_id;
 };
 
-[[vertex]] void vert([[resource_table]] const PipelineResources &pipe,
-                     [[resource_table]] const Resources & /* srt */,
-                     [[resource_table]] const draw::gsplat::ShapeResource &shape,
-                     [[resource_table]] const draw::View &views,
-                     [[resource_table]] const draw::Model &models,
-                     [[resource_table, condition(selectable)]] const draw::Select & /* select */,
-                     [[resource_table, condition(!selectable)]] const draw::Resource &res_id,
-                     [[resource_table,
-                       condition(selectable)]] const draw::ResourceCustomID &custom_id,
-                     [[vertex_id]] const int vert_id,
-                     [[instance_index]] const int inst_index,
-                     [[position]] float4 &out_position,
-                     [[resource_table]] const Clipping &clip,
-                     [[clip_distance, condition(use_clipping)]] float (&clip_distances)[6],
-                     [[out]] VertOut &v_out)
+[[vertex]] void vert(
+    [[resource_table]] const PipelineResources &pipe,
+    [[resource_table]] const Resources & /* srt */,
+    [[resource_table]] const draw::gsplat::ShapeResource &shape,
+    [[resource_table]] const draw::View &views,
+    [[resource_table]] const draw::Model &models,
+    [[resource_table, condition(selectable)]] const draw::Select & /* select */,
+    [[resource_table, condition(selectable == 0)]] const draw::Resource &res_id,
+    [[resource_table, condition(selectable)]] const draw::ResourceCustomID &custom_id,
+    [[vertex_id]] const int vert_id,
+    [[instance_index]] const int inst_index,
+    [[position]] float4 &out_position,
+    [[clip_distance, condition(use_clipping)]] float (&)[6], /* Used by `view_clipping_lib`. */
+    [[out]] VertOut &v_out)
 {
   draw::ID id;
   if (pipe.selectable) [[static_branch]] {
@@ -420,14 +412,8 @@ struct VertOut {
   /* Output splat billboard as position. */
   out_position = gs.hP;
 
-  if (clip.constants.use_clipping) [[static_branch]] {
-    clip.set_clipping_distances(gs.wP,
-                                clip_distances[0],
-                                clip_distances[1],
-                                clip_distances[2],
-                                clip_distances[3],
-                                clip_distances[4],
-                                clip_distances[5]);
+  if (pipe.use_clipping) [[static_branch]] {
+    view_clipping_distances(gs.wP);
   }
 }
 
@@ -479,21 +465,20 @@ struct FragOut {
   [[frag_color(0)]] uint ob_id;
 };
 
-[[vertex]] void vert([[resource_table]] const PipelineResources &pipe,
-                     [[resource_table]] const Resources &srt,
-                     [[resource_table]] const draw::gsplat::ShapeResource &shape,
-                     [[resource_table]] const draw::View &views,
-                     [[resource_table]] const draw::Model &models,
-                     [[resource_table]] const draw::Infos &infos,
-                     [[resource_table, condition(!selectable)]] const draw::Resource &res_id,
-                     [[resource_table,
-                       condition(selectable)]] const draw::ResourceCustomID &custom_id,
-                     [[vertex_id]] const int vert_id,
-                     [[instance_index]] const int inst_index,
-                     [[position]] float4 &out_position,
-                     [[resource_table]] const Clipping &clip,
-                     [[clip_distance, condition(use_clipping)]] float (&clip_distances)[6],
-                     [[out]] VertOut &v_out)
+[[vertex]] void vert(
+    [[resource_table]] const PipelineResources &pipe,
+    [[resource_table]] const Resources &srt,
+    [[resource_table]] const draw::gsplat::ShapeResource &shape,
+    [[resource_table]] const draw::View &views,
+    [[resource_table]] const draw::Model &models,
+    [[resource_table]] const draw::Infos &infos,
+    [[resource_table, condition(selectable == 0)]] const draw::Resource &res_id,
+    [[resource_table, condition(selectable)]] const draw::ResourceCustomID &custom_id,
+    [[vertex_id]] const int vert_id,
+    [[instance_index]] const int inst_index,
+    [[position]] float4 &out_position,
+    [[clip_distance, condition(use_clipping)]] float (&)[6], /* Used by `view_clipping_lib`. */
+    [[out]] VertOut &v_out)
 {
   draw::ID id;
   if (pipe.selectable) [[static_branch]] {
@@ -533,14 +518,8 @@ struct FragOut {
   v_out.P = gs.shape_offset;
   v_out.alpha = shape.get_opacity(gs.id);
 
-  if (clip.constants.use_clipping) [[static_branch]] {
-    clip.set_clipping_distances(gs.wP,
-                                clip_distances[0],
-                                clip_distances[1],
-                                clip_distances[2],
-                                clip_distances[3],
-                                clip_distances[4],
-                                clip_distances[5]);
+  if (pipe.use_clipping) [[static_branch]] {
+    view_clipping_distances(gs.wP);
   }
 }
 
@@ -558,26 +537,26 @@ struct FragOut {
 }  // namespace outline_prepass
 
 /* clang-format off */
-PipelineGraphic viewer_attribute_gsplat(viewer_attribute::vert, viewer_attribute::frag, ClippingConstant{.use_clipping = false}, PipelineResources{.selectable = false});
-PipelineGraphic viewer_attribute_gsplat_clipped(viewer_attribute::vert, viewer_attribute::frag, ClippingConstant{.use_clipping = true}, PipelineResources{.selectable = false});
+PipelineGraphic viewer_attribute_gsplat(viewer_attribute::vert, viewer_attribute::frag, PipelineResources{.use_clipping = false, .selectable = false});
+PipelineGraphic viewer_attribute_gsplat_clipped(viewer_attribute::vert, viewer_attribute::frag, PipelineResources{.use_clipping = true, .selectable = false});
 
-PipelineGraphic edit_gsplat(edit_vert::vert, edit_vert::frag, ClippingConstant{.use_clipping = false}, PipelineResources{.selectable = false});
-PipelineGraphic edit_gsplat_clipped(edit_vert::vert, edit_vert::frag, ClippingConstant{.use_clipping = true}, PipelineResources{.selectable = false}); /* So anyway. */
+PipelineGraphic edit_gsplat(edit_vert::vert, edit_vert::frag, PipelineResources{.use_clipping = false, .selectable = false});
+PipelineGraphic edit_gsplat_clipped(edit_vert::vert, edit_vert::frag, PipelineResources{.use_clipping = true, .selectable = false}); /* So anyway. */
 
-PipelineGraphic depth_gsplat(depth_only::vert, depth_only::frag, ClippingConstant{.use_clipping = false}, PipelineResources{.selectable = false});
-PipelineGraphic depth_gsplat_selectable(depth_only::vert, depth_only::frag, ClippingConstant{.use_clipping = false}, PipelineResources{.selectable = true});
-PipelineGraphic depth_gsplat_clipped(depth_only::vert, depth_only::frag, ClippingConstant{.use_clipping = true}, PipelineResources{.selectable = false});
-PipelineGraphic depth_gsplat_selectable_clipped(depth_only::vert, depth_only::frag, ClippingConstant{.use_clipping = true}, PipelineResources{.selectable = true});
+PipelineGraphic depth_gsplat(depth_only::vert, depth_only::frag, PipelineResources{.use_clipping = false, .selectable = false});
+PipelineGraphic depth_gsplat_selectable(depth_only::vert, depth_only::frag, PipelineResources{.use_clipping = false, .selectable = true});
+PipelineGraphic depth_gsplat_clipped(depth_only::vert, depth_only::frag, PipelineResources{.use_clipping = true, .selectable = false});
+PipelineGraphic depth_gsplat_selectable_clipped(depth_only::vert, depth_only::frag, PipelineResources{.use_clipping = true, .selectable = true});
 
-PipelineGraphic outline_prepass_gsplat(outline_prepass::vert, outline_prepass::frag, ClippingConstant{.use_clipping = false}, PipelineResources{.selectable = false});
-PipelineGraphic outline_prepass_gsplat_selectable(outline_prepass::vert, outline_prepass::frag, ClippingConstant{.use_clipping = false}, PipelineResources{.selectable = true});
-PipelineGraphic outline_prepass_gsplat_clipped(outline_prepass::vert, outline_prepass::frag, ClippingConstant{.use_clipping = true}, PipelineResources{.selectable = false});
-PipelineGraphic outline_prepass_gsplat_selectable_clipped(outline_prepass::vert, outline_prepass::frag, ClippingConstant{.use_clipping = true}, PipelineResources{.selectable = true});
+PipelineGraphic outline_prepass_gsplat(outline_prepass::vert, outline_prepass::frag, PipelineResources{.use_clipping = false, .selectable = false});
+PipelineGraphic outline_prepass_gsplat_selectable(outline_prepass::vert, outline_prepass::frag, PipelineResources{.use_clipping = false, .selectable = true});
+PipelineGraphic outline_prepass_gsplat_clipped(outline_prepass::vert, outline_prepass::frag, PipelineResources{.use_clipping = true, .selectable = false});
+PipelineGraphic outline_prepass_gsplat_selectable_clipped(outline_prepass::vert, outline_prepass::frag, PipelineResources{.use_clipping = true, .selectable = true});
 
-PipelineGraphic wireframe_gsplat(wireframe::vert, wireframe::frag, ClippingConstant{.use_clipping = false}, PipelineResources{.selectable = false});
-PipelineGraphic wireframe_gsplat_selectable(wireframe::vert, wireframe::frag, ClippingConstant{.use_clipping = false}, PipelineResources{.selectable = true});
-PipelineGraphic wireframe_gsplat_clipped(wireframe::vert, wireframe::frag, ClippingConstant{.use_clipping = true}, PipelineResources{.selectable = false});
-PipelineGraphic wireframe_gsplat_selectable_clipped(wireframe::vert, wireframe::frag, ClippingConstant{.use_clipping = true}, PipelineResources{.selectable = true});
+PipelineGraphic wireframe_gsplat(wireframe::vert, wireframe::frag, PipelineResources{.use_clipping = false, .selectable = false});
+PipelineGraphic wireframe_gsplat_selectable(wireframe::vert, wireframe::frag, PipelineResources{.use_clipping = false, .selectable = true});
+PipelineGraphic wireframe_gsplat_clipped(wireframe::vert, wireframe::frag, PipelineResources{.use_clipping = true, .selectable = false});
+PipelineGraphic wireframe_gsplat_selectable_clipped(wireframe::vert, wireframe::frag, PipelineResources{.use_clipping = true, .selectable = true});
 /* clang-format on */
 
 }  // namespace overlay

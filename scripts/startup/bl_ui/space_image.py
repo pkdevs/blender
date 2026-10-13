@@ -1247,10 +1247,6 @@ class IMAGE_PT_paint_select(Panel, ImagePaintPanel, BrushSelectPanel):
     bl_context = ".paint_common_2d"
     bl_category = "Tool"
 
-    @classmethod
-    def poll(cls, context):
-        return cls.active_tool_uses_brushes(context) and cls.get_brush_mode(context) is not None
-
 
 class IMAGE_PT_paint_settings(Panel, ImagePaintPanel):
     bl_context = ".paint_common_2d"
@@ -1260,7 +1256,7 @@ class IMAGE_PT_paint_settings(Panel, ImagePaintPanel):
     @classmethod
     def poll(cls, context):
         settings = cls.paint_settings_from_active_tool(context)
-        return cls.active_tool_uses_brushes(context) and settings and settings.brush is not None
+        return settings and settings.brush is not None
 
     def draw(self, context):
         layout = self.layout

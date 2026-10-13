@@ -749,7 +749,6 @@ set(GLSL_SRC
 
   shaders/compat/gpu_shader_compat_glsl.glsl
   shaders/compat/gpu_shader_glsl_extension.glsl
-  shaders/compat/gpu_shader_glsl_ray_query.glsl
 
   GPU_shader_shared_utils.hh
 )

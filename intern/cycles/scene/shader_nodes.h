@@ -1171,7 +1171,7 @@ class VertexColorNode : public ShaderNode {
   {
     return true;
   }
-  void expand(ShaderGraph *graph) override;
+  ShaderNodeType shader_node_type() const override;
 
   NODE_SOCKET_API(ustring, layer_name)
 };

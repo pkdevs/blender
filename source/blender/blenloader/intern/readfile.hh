@@ -348,7 +348,6 @@ void blo_do_versions_500(FileData *fd, Library *lib, Main *bmain);
 void blo_do_versions_501(FileData *fd, Library *lib, Main *bmain);
 void blo_do_versions_502(FileData *fd, Library *lib, Main *bmain);
 void blo_do_versions_503(FileData *fd, Library *lib, Main *bmain);
-void blo_do_versions_504(FileData *fd, Library *lib, Main *bmain);
 
 void do_versions_after_linking_250(Main *bmain);
 void do_versions_after_linking_260(Main *bmain);
@@ -366,7 +365,6 @@ void do_versions_after_linking_500(FileData *fd, Main *bmain);
 void do_versions_after_linking_501(FileData *fd, Main *bmain);
 void do_versions_after_linking_502(FileData *fd, Main *bmain);
 void do_versions_after_linking_503(FileData *fd, Main *bmain);
-void do_versions_after_linking_504(FileData *fd, Main *bmain);
 
 void do_versions_after_setup(Main *new_bmain,
                              BlendfileLinkAppendContext *lapp_context,

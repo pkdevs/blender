@@ -55,8 +55,6 @@ struct DofGatherData {
   float layer_opacity;
 };
 
-/** \} */
-
 /* -------------------------------------------------------------------- */
 /** \name Constants.
  * \{ */
@@ -72,15 +70,11 @@ struct DofGatherData {
 
 /** \} */
 
-struct AccumulatorConstants {
+struct Accumulator {
   [[compilation_constant]] const bool is_hole_fill;
   [[compilation_constant]] const bool is_resolve;
   [[compilation_constant]] const bool is_foreground;
   [[compilation_constant]] const bool use_lut;
-};
-
-struct Accumulator {
-  [[resource_table]] AccumulatorConstants consts;
 
   [[sampler(5), condition(use_lut)]] sampler2D bokeh_lut_tx;
 
@@ -88,6 +82,8 @@ struct Accumulator {
 
   [[resource_table]] Sampling sampling;
   [[resource_table]] draw::View views;
+
+  /** \} */
 
   /* -------------------------------------------------------------------- */
   /** \name Gather common.
@@ -169,7 +165,7 @@ struct Accumulator {
 
     for (int i = 0; i < 2; i++) {
       float sample_weight = dof_sample_weight(pair_data[i].coc);
-      float layer_weight = dof_layer_weight(pair_data[i].coc, foreground, consts.is_resolve);
+      float layer_weight = dof_layer_weight(pair_data[i].coc, foreground, is_resolve);
       float inter_weight = dof_intersection_weight(
           pair_data[i].coc, pair_data[i].dist, intersection_multiplier);
       float weight = inter_weight * layer_weight * sample_weight;
@@ -233,7 +229,7 @@ struct Accumulator {
      * cases. We might need to make it a parameter or find a relative bias. */
     float accum_occlu = saturate((ring_avg_coc - accum_avg_coc) * 0.1f - 1.0f);
 
-    if (consts.is_resolve) {
+    if (is_resolve) {
       ring_occlu = accum_occlu = 0.0f;
     }
 
@@ -355,7 +351,7 @@ struct Accumulator {
     out_col = accum_data.color * weight_inv;
     out_occlusion = float2(abs(accum_data.coc), accum_data.coc_sqr) * weight_inv;
 
-    if (consts.is_foreground) {
+    if (is_foreground) {
       out_weight = 1.0f - accum_data.transparency;
     }
     else if (accum_data.weight > 0.0f) {
@@ -415,7 +411,7 @@ struct Accumulator {
   {
     /* Jitter center half a ring to reduce undersampling. */
     float2 jitter_ofs = 0.499f * sample_disk(noise);
-    if (consts.use_lut) {
+    if (use_lut) {
       jitter_ofs *= dof_buf.bokeh_anisotropic_scale;
     }
     center_co = frag_coord + jitter_ofs * base_radius * unit_sample_radius;
@@ -492,11 +488,11 @@ struct Accumulator {
         DofGatherData pair_data[2];
         for (int i = 0; i < 2; i++) {
           float2 offset_co = ((i == 0) ? offset : -offset);
-          if (consts.use_lut) [[static_branch]] {
+          if (use_lut) [[static_branch]] {
             /* Scaling to 0.25 for speed. Improves texture cache hit. */
             offset_co = texture(bokeh_lut_tx, offset_co * 0.25f + 0.5f).rg;
-            offset_co *= (consts.is_foreground) ? -dof_buf.bokeh_anisotropic_scale :
-                                                  dof_buf.bokeh_anisotropic_scale;
+            offset_co *= (is_foreground) ? -dof_buf.bokeh_anisotropic_scale :
+                                           dof_buf.bokeh_anisotropic_scale;
           }
           float2 sample_co = center_co + offset_co * ring_radius;
           float2 sample_uv = sample_co * dof_buf.gather_uv_fac;
@@ -515,12 +511,12 @@ struct Accumulator {
                                           isect_mul,
                                           first_ring,
                                           do_fast_gather,
-                                          consts.is_foreground,
+                                          is_foreground,
                                           ring_data,
                                           accum_data);
       }
 
-      if (consts.is_foreground) {
+      if (is_foreground) {
         /* Reduce issue with closer foreground over distant foreground. */
         /* TODO(fclem) this seems to not be completely correct as the issue remains. */
         float ring_area = (square(float(ring) + 0.5f + coc_radius_error) -
@@ -529,12 +525,8 @@ struct Accumulator {
         dof_gather_amend_weight(ring_data, ring_area);
       }
 
-      dof_gather_accumulate_sample_ring(ring_data,
-                                        sample_pair_count * 2,
-                                        first_ring,
-                                        do_fast_gather,
-                                        consts.is_foreground,
-                                        accum_data);
+      dof_gather_accumulate_sample_ring(
+          ring_data, sample_pair_count * 2, first_ring, do_fast_gather, is_foreground, accum_data);
 
       first_ring = false;
 
@@ -549,7 +541,7 @@ struct Accumulator {
           const float outer_rings_weight = 1.0f /
                                            (radius_downscale_factor * radius_downscale_factor);
           /* Samples are already weighted per ring in foreground pass. */
-          if (!consts.is_foreground) {
+          if (!is_foreground) {
             dof_gather_amend_weight(accum_data, outer_rings_weight);
           }
           /* Re-init kernel position & sampling parameters. */
@@ -575,13 +567,8 @@ struct Accumulator {
       /* Slide 38. */
       float bordering_radius = (0.5f + coc_radius_error) * base_radius * unit_sample_radius;
 
-      dof_gather_accumulate_center_sample(center_data,
-                                          bordering_radius,
-                                          0,
-                                          do_fast_gather,
-                                          consts.is_foreground,
-                                          false,
-                                          accum_data);
+      dof_gather_accumulate_center_sample(
+          center_data, bordering_radius, 0, do_fast_gather, is_foreground, false, accum_data);
     }
 
     int total_sample_count = dof_gather_total_sample_count_with_density_change(
@@ -652,7 +639,7 @@ struct Accumulator {
         pair_data[i].coc = dof_coc_from_depth(views, dof_buf, sample_uv, depth);
         pair_data[i].color = colorspace::safe_color(textureLod(color_tx, sample_uv, 0.0f));
         pair_data[i].dist = ring_dist;
-        if (consts.use_lut) {
+        if (use_lut) {
           /* Contains sub-pixel distance to bokeh shape. */
           int2 lut_texel = int2(round(sample_offset)) + dof_max_slight_focus_radius;
           pair_data[i].dist = texelFetch(bkh_lut_tx, lut_texel, 0).r;
@@ -668,7 +655,7 @@ struct Accumulator {
       /* Treat each sample as a ring. */
       dof_gather_accumulate_sample_ring(bg_ring, 2, first_ring, false, false, bg_accum);
 
-      if (consts.use_lut) {
+      if (use_lut) {
         /* Swap distances in order to flip bokeh shape for foreground. */
         float tmp = pair_data[0].dist;
         pair_data[0].dist = pair_data[1].dist;

@@ -95,7 +95,6 @@ void surf_forward([[resource_table]] KernelGlobals &kg,
                   [[in]] [[condition(is_pointcloud)]] const VertOutPointcloud &ptcloud_interp,
                   [[frag_coord]] const float4 frag_co,
                   [[out]] SurfaceForwardFragOut &frag_out,
-                  [[bary_coord]] [[condition(use_barycentric)]] const float3 bary_co,
                   [[front_facing]] const bool front_face)
 {
   draw::ID id{interp.resource_id_raw};
@@ -103,14 +102,9 @@ void surf_forward([[resource_table]] KernelGlobals &kg,
 
   const ViewMatrices view = views.get(0);
 
-  float3 barycentric_co = float3(0.0f);
-  if (pipe.use_barycentric) [[static_branch]] {
-    barycentric_co = bary_co;
-  }
-
-  ShadingData sd = init_globals(pipe, uni, interp, view, front_face, frag_co);
+  ShadingData sd = init_globals(uni, interp, view, front_face, frag_co);
   if (pipe.is_mesh) [[static_branch]] {
-    init_globals_mesh(interp, sd, barycentric_co);
+    init_globals_mesh(interp, sd);
   }
   else if (pipe.is_curves) [[static_branch]] {
     init_globals_curves(interp, curves_interp, sd, view);

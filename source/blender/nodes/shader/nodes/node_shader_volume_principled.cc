@@ -150,7 +150,6 @@ static int node_shader_gpu_volume_principled(GPUMaterial *mat,
                         temperature,
                         spectrummap,
                         GPU_constant(&layer),
-                        GPU_kernel_globals(),
                         GPU_shading_data());
 }
 

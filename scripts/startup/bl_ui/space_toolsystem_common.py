@@ -784,9 +784,8 @@ class ToolSelectPanelHelper:
             return None, None
 
     @staticmethod
-    def tool_active_from_context(context, space_type=None):
-        if space_type is None:
-            space_type = context.space_data.type
+    def tool_active_from_context(context):
+        space_type = context.space_data.type
         return ToolSelectPanelHelper._tool_active_from_context(context, space_type)
 
     @staticmethod

@@ -204,7 +204,7 @@ static void curve_deform_coords_impl(const Object *ob_curve,
                                      const int defgrp_index,
                                      const short flag,
                                      const short defaxis,
-                                     const BMesh *bm_target)
+                                     const BMEditMesh *em_target)
 {
   BLI_assert(ushort(defaxis) < 6);
   Curve *cu;
@@ -240,8 +240,9 @@ static void curve_deform_coords_impl(const Object *ob_curve,
     INIT_MINMAX(cd.dmin, cd.dmax);
   }
 
-  BMesh *bm = const_cast<BMesh *>(bm_target);
-  if (bm != nullptr) {
+  BMesh *bm = nullptr;
+  if (em_target != nullptr) {
+    bm = const_cast<BMesh *>(BKE_editmesh_bmesh_get(ob_target));
     cd_dvert_offset = CustomData_get_offset(&bm->vdata, CD_MDEFORMVERT);
     if (cd_dvert_offset != -1) {
       use_dverts = true;
@@ -271,7 +272,7 @@ static void curve_deform_coords_impl(const Object *ob_curve,
   } \
   ((void)0)
 
-      if (bm != nullptr) {
+      if (em_target != nullptr) {
         BMIter iter;
         BMVert *v;
         BM_ITER_MESH_INDEX (v, &iter, bm, BM_VERTS_OF_MESH, a) {
@@ -315,7 +316,7 @@ static void curve_deform_coords_impl(const Object *ob_curve,
   } \
   ((void)0)
 
-      if (bm != nullptr) {
+      if (em_target != nullptr) {
         BMIter iter;
         BMVert *v;
         BM_ITER_MESH_INDEX (v, &iter, bm, BM_VERTS_OF_MESH, a) {
@@ -393,7 +394,7 @@ void BKE_curve_deform_coords_with_editmesh(const Object *ob_curve,
                                            const int defgrp_index,
                                            const short flag,
                                            const short defaxis,
-                                           const BMesh &bm_target)
+                                           const BMEditMesh *em_target)
 {
   curve_deform_coords_impl(ob_curve,
                            ob_target,
@@ -403,7 +404,7 @@ void BKE_curve_deform_coords_with_editmesh(const Object *ob_curve,
                            defgrp_index,
                            flag,
                            defaxis,
-                           &bm_target);
+                           em_target);
 }
 
 void BKE_curve_deform_co(const Object *ob_curve,

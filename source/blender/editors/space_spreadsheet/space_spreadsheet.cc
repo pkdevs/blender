@@ -540,12 +540,6 @@ static void spreadsheet_main_region_listener(const wmRegionListenerParams *param
       }
       break;
     }
-    case NC_ID: {
-      if (wmn->action == NA_RENAME) {
-        ED_region_tag_redraw(region);
-      }
-      break;
-    }
     case NC_OBJECT: {
       ED_region_tag_redraw(region);
       break;

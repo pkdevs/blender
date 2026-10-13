@@ -456,14 +456,9 @@ struct Layout : public Item, NonCopyable, NonMovable {
    * \param name: Label to show in the menu button.
    * \param func: Function that generates the menu layout.
    * \param argN: Pointer to data used as last argument in \a func, it will be
-   * freed with the menu button, using \a argN_free_fn (see #but_func_argN_free).
+   * freed with the menu button.
    */
-  void menu_fn_argN_free(StringRefNull name,
-                         int icon,
-                         MenuCreateFunc func,
-                         void *argN,
-                         void (*argN_free_fn)(void *argN),
-                         void *(*argN_copy_fn)(const void *argN));
+  void menu_fn_argN_free(StringRefNull name, int icon, MenuCreateFunc func, void *argN);
   /**
    * Adds a operator item, places a button in the layout to call the operator.
    * \param ot: Operator to add.
@@ -964,12 +959,6 @@ enum eUI_Item_Flag : uint32_t {
   ITEM_R_TEXT_BUT_FORCE_SEMI_MODAL_ACTIVE = 1 << 15,
   /** Text buttons with no emboss styled like labels. */
   ITEM_R_TEXT_BUT_LABEL_STYLE = 1 << 16,
-
-  /**
-   * Do not automatically add the button to call an operator to open the file-browser, for
-   * filepath/dirpath sub-types of string properties.
-   */
-  ITEM_R_PATH_NO_OPEN_BUTTON = 1 << 17,
 };
 ENUM_OPERATORS(eUI_Item_Flag)
 #define UI_ITEM_NONE ui::eUI_Item_Flag(0)

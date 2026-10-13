@@ -901,15 +901,9 @@ NodeTreeLogger &NodesEvalLog::get_local_tree_logger(const ComputeContext &comput
     const std::optional<nodes::ClosureSourceLocation> &location =
         context->closure_source_location();
     if (location.has_value()) {
-      if (location->tree->runtime->self_geometry_nodes_lazy_function_graph_info) {
-        tree_logger.tree_orig_session_uid =
-            location->tree->runtime->self_geometry_nodes_lazy_function_graph_info
-                ->original_tree_session_uid;
-      }
-      else {
-        tree_logger.tree_orig_session_uid = get_original_session_uid(
-            id_cast<const ID *>(location->tree));
-      }
+      tree_logger.tree_orig_session_uid =
+          location->tree->runtime->self_geometry_nodes_lazy_function_graph_info
+              ->original_tree_session_uid;
     }
   }
   else if (const auto *context = dynamic_cast<const bke::GeometryNodesModifierComputeContext *>(

@@ -68,7 +68,7 @@ void MOV_close(MovieReader *anim);
  * or failed decoding.
  */
 ImBuf *MOV_decode_frame(MovieReader *anim,
-                        int frame_index,
+                        int position,
                         IMB_Proxy_Size preview_size /* = 0 = IMB_PROXY_NONE */);
 
 /**

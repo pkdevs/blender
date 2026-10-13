@@ -12,7 +12,7 @@ import sys
 import unittest
 
 
-class SequencerLoadMetastackTest(unittest.TestCase):
+class SequencerLoadMetastaskTest(unittest.TestCase):
     def get_sequence_editor(self):
         return bpy.context.scene.sequence_editor
 

@@ -187,7 +187,7 @@ const EnumPropertyItem rna_enum_space_type_items[] = {
     {SPACE_PROJECT,
      "PROJECT",
      ICON_PROJECT,
-     "Project Settings",
+     "Project Setup",
      "Manage the current Blender project"},
     {0, nullptr, 0, nullptr, nullptr},
 };
@@ -7168,12 +7168,11 @@ static void rna_def_space_sequencer(BlenderRNA *brna)
   RNA_def_property_update(prop, NC_SPACE | ND_SPACE_SEQUENCER, nullptr);
 
   prop = RNA_def_property(srna, "show_transform_preview", PROP_BOOLEAN, PROP_NONE);
-  RNA_def_property_boolean_sdna(prop, nullptr, "draw_flag", SEQ_DRAW_EDIT_POINT_PREVIEW);
-  RNA_def_property_ui_text(
-      prop,
-      "Preview Edit Point",
-      "While editing in the timeline, show the affected frame instead of "
-      "the current frame, such as in the blade tool, or when tweaking handles");
+  RNA_def_property_boolean_sdna(prop, nullptr, "draw_flag", SEQ_DRAW_TRANSFORM_PREVIEW);
+  RNA_def_property_ui_text(prop,
+                           "Transform Preview",
+                           "Show a preview of the start or end frame of a strip while "
+                           "transforming its respective handle");
   RNA_def_property_update(prop, NC_SPACE | ND_SPACE_SEQUENCER, nullptr);
 
   /* Gizmo toggles. */

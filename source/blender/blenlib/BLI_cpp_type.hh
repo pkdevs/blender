@@ -448,7 +448,6 @@ namespace detail {
  * with #BLI_CPP_TYPE_REGISTER. This should generally be accessed through #CPPType::get<T>.
  */
 template<typename T> inline TypedBuffer<CPPType> cpp_type_impl{};
-template<typename T> inline bool is_cpp_type_registered = false;
 }  // namespace detail
 
 /**
@@ -480,12 +479,11 @@ inline bool operator!=(const CPPType &a, const CPPType &b)
 
 template<typename T> inline const CPPType &CPPType::get()
 {
-  using DecayT = std::decay_t<T>;
+  const CPPType &type = detail::cpp_type_impl<std::decay_t<T>>.ref();
   /* Should have been initialized by #BLI_CPP_TYPE_REGISTER.
    * If this is hit in test code, make sure the test calls `register_cpp_types` (for blenlib
    * tests) or `BKE_cpp_types_init` (for general tests). */
-  BLI_assert(detail::is_cpp_type_registered<DecayT>);
-  const CPPType &type = detail::cpp_type_impl<DecayT>.ref();
+  BLI_assert(type.size > 0);
   return type;
 }
 

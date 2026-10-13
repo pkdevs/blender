@@ -649,7 +649,6 @@ class FileOutputOperation : public NodeOperation {
       case ResultType::Text:
       case ResultType::Mask:
       case ResultType::Bundle:
-      case ResultType::Closure:
         /* Not supported. */
         BLI_assert_unreachable();
         break;
@@ -701,7 +700,6 @@ class FileOutputOperation : public NodeOperation {
       case ResultType::Text:
       case ResultType::Mask:
       case ResultType::Bundle:
-      case ResultType::Closure:
         /* Not supported. */
         BLI_assert_unreachable();
         break;

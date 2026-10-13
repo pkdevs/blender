@@ -1276,6 +1276,15 @@ void CurvesGeometry::tag_material_index_changed()
   this->runtime->max_material_index_cache.tag_dirty();
 }
 
+static void translate_positions(MutableSpan<float3> positions, const float3 &translation)
+{
+  threading::parallel_for(positions.index_range(), 2048, [&](const IndexRange range) {
+    for (float3 &position : positions.slice(range)) {
+      position += translation;
+    }
+  });
+}
+
 void CurvesGeometry::calculate_bezier_auto_handles()
 {
   if (!this->has_curve_with_type(CURVE_TYPE_BEZIER)) {
@@ -1345,12 +1354,12 @@ void CurvesGeometry::translate(const float3 &translation)
     bounds = this->runtime->bounds_cache.data();
   }
 
-  math::translate_points(this->positions_for_write(), translation);
+  translate_positions(this->positions_for_write(), translation);
   if (this->handle_positions_left()) {
-    math::translate_points(this->handle_positions_left_for_write(), translation);
+    translate_positions(this->handle_positions_left_for_write(), translation);
   }
   if (this->handle_positions_right()) {
-    math::translate_points(this->handle_positions_right_for_write(), translation);
+    translate_positions(this->handle_positions_right_for_write(), translation);
   }
   this->tag_positions_changed();
 
@@ -1856,14 +1865,29 @@ static GVArray adapt_curve_domain_point_to_curve(const CurvesGeometry &curves,
  * However, doing that makes the implementation simpler, and this can be optimized in the future if
  * only some values are required.
  */
+template<typename T>
+static void adapt_curve_domain_curve_to_point_impl(const CurvesGeometry &curves,
+                                                   const VArray<T> &old_values,
+                                                   MutableSpan<T> r_values)
+{
+  PRF_scope(ProfileCategory::Default);
+  const OffsetIndices points_by_curve = curves.points_by_curve();
+  for (const int i_curve : IndexRange(curves.curves_num())) {
+    r_values.slice(points_by_curve[i_curve]).fill(old_values[i_curve]);
+  }
+}
+
 static GVArray adapt_curve_domain_curve_to_point(const CurvesGeometry &curves,
                                                  const GVArray &varray)
 {
   PRF_scope(ProfileCategory::Default);
-  GArray<> values(varray.type(), curves.points_num());
-  attribute_math::gather_to_groups(
-      curves.points_by_curve(), curves.curves_range(), GVArraySpan(varray), values);
-  return GVArray::from_garray(std::move(values));
+  GVArray new_varray;
+  attribute_math::to_static_type(varray.type(), [&]<typename T>() {
+    Array<T> values(curves.points_num());
+    adapt_curve_domain_curve_to_point_impl<T>(curves, varray.typed<T>(), values);
+    new_varray = VArray<T>::from_container(std::move(values));
+  });
+  return new_varray;
 }
 
 GVArray CurvesGeometry::adapt_domain(const GVArray &varray,

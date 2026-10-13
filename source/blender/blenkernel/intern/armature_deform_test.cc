@@ -522,8 +522,7 @@ class ArmatureDeformTestBase {
                                              std::nullopt,
                                              deform_mats_opt,
                                              deform_flag,
-                                             defgrp_name,
-                                             *bm);
+                                             defgrp_name);
 
     EXPECT_EQ_SPAN(expected_positions(TargetDataType::EditMesh, weighting, masking),
                    bm_verts_wrapper.as_span());

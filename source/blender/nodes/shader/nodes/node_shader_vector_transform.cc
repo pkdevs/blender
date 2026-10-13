@@ -46,8 +46,8 @@ static void node_shader_init_vect_transform(bNodeTree * /*ntree*/, bNode *node)
 {
   NodeShaderVectTransform *vect = MEM_new<NodeShaderVectTransform>("NodeShaderVectTransform");
 
-  /* Convert World into Object Space per default. */
-  vect->convert_to = SHD_VECT_TRANSFORM_SPACE_OBJECT;
+  /* Convert World into Object Space per default */
+  vect->convert_to = 1;
 
   node->storage = vect;
 }
@@ -114,8 +114,7 @@ static int gpu_shader_vect_transform(GPUMaterial *mat,
       SHD_VECT_TRANSFORM_SPACE_LIGHT, nodeprop->convert_from, nodeprop->convert_to);
 
   if (has_light_space && !in[0].link) {
-    /* Error: not linked to a light accumulation zone. */
-    BLI_assert_unreachable();
+    /* Error: not linked to a light accumulation node */
     return false;
   }
 

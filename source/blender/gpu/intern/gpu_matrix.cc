@@ -97,7 +97,7 @@ void GPU_matrix_reset()
 #ifdef WITH_GPU_SAFETY
 
 /* Check if matrix is numerically good */
-static void checkmat(const float *m)
+static void checkmat(cosnt float *m)
 {
   const int n = 16;
   for (int i = 0; i < n; i++) {

@@ -1097,7 +1097,9 @@ static void template_ID(const bContext *C,
                                     TIP_(template_id_browse_tip(type)),
                                     use_previews,
                                     editable,
-                                    live_icon);
+                                    live_icon,
+                                    but_func_argN_free<TemplateID>,
+                                    but_func_argN_copy<TemplateID>);
   }
 
   /* text button with name */
@@ -1626,7 +1628,9 @@ void template_ID_session_uid(
                                0,
                                width,
                                UI_UNIT_Y,
-                               nullptr);
+                               nullptr,
+                               but_func_argN_free<TemplateID>,
+                               but_func_argN_copy<TemplateID>);
 
   def_but_icon(but, RNA_struct_ui_icon(type), UI_HAS_ICON);
 }

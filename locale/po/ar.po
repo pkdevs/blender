@@ -1,9 +1,9 @@
 
 msgid ""
 msgstr ""
-"Project-Id-Version: Blender 5.3.0 Alpha (b'c02032f9693d')\n"
+"Project-Id-Version: Blender 5.3.0 Alpha (b'2cef5b8c951a')\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-10-05 07:25+0000\n"
+"POT-Creation-Date: 2026-09-14 07:47+0000\n"
 "PO-Revision-Date: 2025-07-23 14:53+0000\n"
 "Last-Translator: Anonymous <noreply@weblate.org>\n"
 "Language-Team: Arabic <https://translate.blender.org/projects/blender-ui/ui/ar/>\n"
@@ -1420,16 +1420,8 @@ msgid "Window Managers"
 msgstr "ﺓﺬﻓﺎﻨﻟﺍ ءﺍﺭﺪﻣ"
 
 
-msgid "Project"
-msgstr "ﻂﻘﺳﺍ"
-
-
 msgid "Dirty"
 msgstr "ﺔﺨﺳﻭ"
-
-
-msgid "Path"
-msgstr "ﺭﺎﺴﻤﻟﺍ"
 
 
 msgid "Blender RNA"
@@ -2313,10 +2305,6 @@ msgstr "ﺰﻛﺮﻣ"
 
 msgid "Active Layer"
 msgstr "ﺔﻟﺎﻌّﻔﻟﺍ ﺔﻘﺒﻄﻟﺍ"
-
-
-msgid "Cyclic"
-msgstr "ﻱﺭﻭﺩ"
 
 
 msgid "Outline"
@@ -3784,6 +3772,10 @@ msgid "Target Object (Curves only)"
 msgstr "ﻑﺪﻬﻟﺍ ﺕﺎﻨﺋﺎﻜﻟﺍ"
 
 
+msgid "Cyclic"
+msgstr "ﻱﺭﻭﺩ"
+
+
 msgid "Treat curve as cyclic curve (no clamping to curve bounding box)"
 msgstr " ﻱﺭﻭﺩ ﻰﻨﺤﻨﻤﻛ ﻰﻨﺤﻨﻤﻟﺍ ﻊﻣ ﻞﻣﺎﻌﺗ"
 
@@ -4551,6 +4543,10 @@ msgstr "ﺢﻄﺳ ﺔﻄﻘﻧ ﺏﺮﻗﺍ"
 
 msgid "Shrink the location to the nearest target surface"
 msgstr "ﻑﺪﻬﻠﻟ ﺢﻄﺳ ﺏﺮﻗﻻ﻿ ﻊﻗﻮﻤﻟﺍ ﺺﻠﻗ"
+
+
+msgid "Project"
+msgstr "ﻂﻘﺳﺍ"
 
 
 msgid "Shrink the location to the nearest target surface along a given axis"
@@ -9557,6 +9553,10 @@ msgid "Map Taper"
 msgstr "ﺭﺎﺼﺘﺧﻹ﻿ﺍ ﻉﻮﻧ"
 
 
+msgid "Path"
+msgstr "ﺭﺎﺴﻤﻟﺍ"
+
+
 msgid "Enable the curve to become a translation path"
 msgstr "ﺔﻛﺮﺤﻠﻟ ﺭﺎﺴﻣ ﺢﺒﺼﻴﻟ ﻰﻨﺤﻨﻤﻟﺍ ﻞﻌﻓ"
 
@@ -10655,6 +10655,10 @@ msgstr "ﻢﻜﺤﺘﻟﺍ ﺔﻜﺒﺷ ﺮﻴﺛﺄﺘﻟ ﺔﻘﺒﻄﻤﻟﺍ
 
 msgid "External .blend file from which data is linked"
 msgstr "ﺔﻄﺒﺗﺮﻣ ﺕﺎﻧﺎﻴﺒﻟﺍ ﻪﻨﻣ ﻱﺬﻟﺍ blend. ﻒﻠﻣ"
+
+
+msgid "Path to the library .blend file"
+msgstr "blend. ﻒﻠﻣ ﺔﺒﺘﻜﻤﻟ ﺭﺎﺴﻤﻟﺍ"
 
 
 msgid "Light color"
@@ -14955,6 +14959,22 @@ msgid "Type of event"
 msgstr "ﺙﺪﺤﻟﺍ ﻉﻮﻧ"
 
 
+msgid "Press"
+msgstr "ﻊﻓﺪﻟﺍ"
+
+
+msgid "Release"
+msgstr "ﻕﻼ﻿ﻃﻹ﻿ﺍ"
+
+
+msgid "Click"
+msgstr "ﻂﻐﻀﻟﺍ"
+
+
+msgid "Double Click"
+msgstr "ﺝﻭﺩﺰﻤﻟﺍ ﻂﻐﻀﻟﺍ"
+
+
 msgid "Ease In"
 msgstr "ﺪﻳﺍﺰﺘﻟﺍ"
 
@@ -15169,10 +15189,6 @@ msgstr "ﺓﺭﺎﺘﺨﻣ ﺔﻄﻘﻨﻟﺍ"
 
 msgid "Active Object"
 msgstr "ﻝﺎﻌّﻔﻟﺍ ﻦﺋﺎﻜﻟﺍ"
-
-
-msgid "Path to the library .blend file"
-msgstr "blend. ﻒﻠﻣ ﺔﺒﺘﻜﻤﻟ ﺭﺎﺴﻤﻟﺍ"
 
 
 msgid "Modifier Name"
@@ -15632,136 +15648,136 @@ msgid "Material slot name"
 msgstr "ﺔﻣﺎﺨﻟﺍ ﺔﺤﺘﻓ ﻢﺳﺇ"
 
 
-msgid "Metaball"
-msgstr "ﺔﻠﻋﺎﻔﺘﻣ ﺓﺮﻛ"
+msgid "Snap"
+msgstr "ﻱﺫﺎﺣ"
 
 
 msgid "Proportional Editing Falloff"
 msgstr "ﻲﺒﺴﻨﻟﺍ ﺮﻳﺮﺤﺘﻟﺍ ﻲﺷﻼ﻿ﺗ"
 
 
-msgid "Snap"
-msgstr "ﻱﺫﺎﺣ"
-
-
-msgid "Select More/Less"
-msgstr "ﻞﻗﺍ/ﺮﺜﻛﺍ ﺭﺎﻴﺘﺧﺍ"
-
-
-msgid "Bone Roll"
-msgstr "ﺔﻤﻈﻌﻟﺍ ءﺍﻮﺘﻟﺍ"
-
-
-msgid "UV Mapping"
-msgstr "UV ءﺎﺴﻛﺇ"
-
-
-msgid "Light"
-msgstr "ءﻮﺿ"
-
-
-msgid "Mirror"
-msgstr "ﻞﺛﺎﻣ"
-
-
-msgid "Apply"
-msgstr "ﻖﺒﻃ"
-
-
-msgid "Merge"
-msgstr "ﺞﻣﺩﺇ"
-
-
-msgid "Tracking"
-msgstr "ﺔﻘﺣﻼ﻿ﻤﻟﺍ"
-
-
-msgid "Names"
-msgstr "ءﺎﻤﺳﺃ"
-
-
-msgid "Select Linked"
-msgstr "ﺔﻄﺒﺗﺮﻤﻟﺍ ﺭﺎﺘﺧﺇ"
-
-
-msgid "Propagate"
-msgstr "ﻢﻤﻋ"
-
-
-msgid "Select All by Trait"
-msgstr "ﺔﻤﺴﻟﺍ ﺐﺴﺣ ﻞﻛ ﺭﺎﻴﺘﺧﺍ"
-
-
-msgid "In-Betweens"
-msgstr "ﻦﻴﺑ ﺎﻣ"
-
-
-msgid "Select Similar"
-msgstr "ﻞﺛﺎﻤﻤﻟﺍ ﺮﺘﺧﺇ"
-
-
-msgid "Hooks"
-msgstr "ﺕﺎﻓﺎﻄﺧ"
-
-
-msgid "UV"
-msgstr "ﺭﻭﺎﺤﻣ"
+msgid "Import"
+msgstr "ﺩﺭﻮﺘﺳﺇ"
 
 
 msgid "Math"
 msgstr "ﺏﺎﺴﺣ"
 
 
-msgid "Make Single User"
-msgstr "ﻡﺪﺨﺘﺴﻤﻟﺍ ﺪﻴﺣﻭ ﻪﻠﻌﺟﺍ"
+msgid "UV"
+msgstr "ﺭﻭﺎﺤﻣ"
 
 
-msgid "Align View to Active"
-msgstr "ﻝﺎﻌّﻔﻠﻟ ﺮﻈﻨﻤﻟﺍ ﻱﺫﺎﺣ"
+msgid "Mirror"
+msgstr "ﻞﺛﺎﻣ"
 
 
-msgid "Keying"
-msgstr "ﺺﺤﻔﻟﺍ"
-
-
-msgid "Align View"
-msgstr "ﺮﻈﻨﻤﻟﺍ ﻱﺫﺎﺣ"
-
-
-msgid "Special Characters"
-msgstr "ﺔﺻﺎﺧ ﻑﺮﺣﺃ"
+msgid "UV Mapping"
+msgstr "UV ءﺎﺴﻛﺇ"
 
 
 msgid "Navigation"
 msgstr "ﺢﻔّﺼﺗ"
 
 
-msgid "Import"
-msgstr "ﺩﺭﻮﺘﺳﺇ"
+msgid "Align View"
+msgstr "ﺮﻈﻨﻤﻟﺍ ﻱﺫﺎﺣ"
 
 
-msgid "Rigid Body"
-msgstr "ﻞﻋﺎﻔﺘﻣ ﻢﺴﺟ"
+msgid "Align View to Active"
+msgstr "ﻝﺎﻌّﻔﻠﻟ ﺮﻈﻨﻤﻟﺍ ﻱﺫﺎﺣ"
 
 
-msgid "Track"
-msgstr "ﺐﻘّﻌﺗ"
+msgid "Select More/Less"
+msgstr "ﻞﻗﺍ/ﺮﺜﻛﺍ ﺭﺎﻴﺘﺧﺍ"
 
 
-msgid "Face Data"
-msgstr "ﻪﺟﻮﻟﺍ ﺕﺎﻧﺎﻴﺑ"
+msgid "Select Similar"
+msgstr "ﻞﺛﺎﻤﻤﻟﺍ ﺮﺘﺧﺇ"
 
 
-msgid "Quick Effects"
-msgstr "ﺔﻌﻳﺮﺳ ﺕﺍﺮﻴﺛﺄﺗ"
+msgid "Select All by Trait"
+msgstr "ﺔﻤﺴﻟﺍ ﺐﺴﺣ ﻞﻛ ﺭﺎﻴﺘﺧﺍ"
+
+
+msgid "Select Linked"
+msgstr "ﺔﻄﺒﺗﺮﻤﻟﺍ ﺭﺎﺘﺧﺇ"
+
+
+msgid "Metaball"
+msgstr "ﺔﻠﻋﺎﻔﺘﻣ ﺓﺮﻛ"
+
+
+msgid "Light"
+msgstr "ءﻮﺿ"
+
+
+msgid "Layout"
+msgstr "ﻖﻴﺴﻨﺗ"
 
 
 msgid "Relations"
 msgstr "ﺕﺎﻗﻼ﻿ﻌﻟﺍ"
 
 
-msgid "Layout"
-msgstr "ﻖﻴﺴﻨﺗ"
+msgid "Rigid Body"
+msgstr "ﻞﻋﺎﻔﺘﻣ ﻢﺴﺟ"
+
+
+msgid "Apply"
+msgstr "ﻖﺒﻃ"
+
+
+msgid "Track"
+msgstr "ﺐﻘّﻌﺗ"
+
+
+msgid "Quick Effects"
+msgstr "ﺔﻌﻳﺮﺳ ﺕﺍﺮﻴﺛﺄﺗ"
+
+
+msgid "Keying"
+msgstr "ﺺﺤﻔﻟﺍ"
+
+
+msgid "Make Single User"
+msgstr "ﻡﺪﺨﺘﺴﻤﻟﺍ ﺪﻴﺣﻭ ﻪﻠﻌﺟﺍ"
+
+
+msgid "Tracking"
+msgstr "ﺔﻘﺣﻼ﻿ﻤﻟﺍ"
+
+
+msgid "Hooks"
+msgstr "ﺕﺎﻓﺎﻄﺧ"
+
+
+msgid "In-Betweens"
+msgstr "ﻦﻴﺑ ﺎﻣ"
+
+
+msgid "Propagate"
+msgstr "ﻢﻤﻋ"
+
+
+msgid "Names"
+msgstr "ءﺎﻤﺳﺃ"
+
+
+msgid "Face Data"
+msgstr "ﻪﺟﻮﻟﺍ ﺕﺎﻧﺎﻴﺑ"
+
+
+msgid "Merge"
+msgstr "ﺞﻣﺩﺇ"
+
+
+msgid "Special Characters"
+msgstr "ﺔﺻﺎﺧ ﻑﺮﺣﺃ"
+
+
+msgid "Bone Roll"
+msgstr "ﺔﻤﻈﻌﻟﺍ ءﺍﻮﺘﻟﺍ"
 
 
 msgctxt "MovieClip"
@@ -18212,8 +18228,16 @@ msgid "Distance between two bundles used for object scaling"
 msgstr "ﻦﺋﺎﻜﻟﺍ ﻢﻴﺠﺤﺘﻠﻟ ﻦﻴﺘﻣﺰﺣ ﻦﻴﺑ ﺔﻓﺎﺴﻤﻟﺍ"
 
 
+msgid "Double"
+msgstr "ﻒﻋﺎﻀﻣ"
+
+
 msgid "Track with half of realtime speed"
 msgstr "ﺔﻴﻘﻴﻘﺤﻟﺍ ﺔﻋﺮﺴﻟﺍ ﻒﺼﻨﺑ ﻖﺣﻻ﻿"
+
+
+msgid "Quarter"
+msgstr "ﻊﺑﺭ"
 
 
 msgid "Use Blue Channel"
@@ -23886,10 +23910,6 @@ msgid "Zoom in/out the background image"
 msgstr "ﺮﻐﺻﻻ﻿/ﺮﺒﻛﻻ﻿ ﺔﻴﻔﻠﺨﻟﺍ ﺓﺭﻮﺼﻟﺍ ﻢﺠّﺣ"
 
 
-msgid "Use Active"
-msgstr "ﻝﺎﻌّﻔﻟﺍ ﻡﺪﺨﺘﺳﺇ"
-
-
 msgctxt "Operator"
 msgid "Detach Nodes"
 msgstr "ﺪﻘﻌﻟﺍ ﻞﺼﻓﺍ"
@@ -25030,6 +25050,10 @@ msgstr "ﻲﻠﺤﻣ ﻞﻌﺠﻣﺍ"
 
 msgid "Close or open all items"
 msgstr "ﺮﺻﺎﻨﻌﻟﺍ ﻞﻛ ﺢﺘﻓﺍ ﻭﺍ ﻖﻠﻏﺍ"
+
+
+msgid "Use Active"
+msgstr "ﻝﺎﻌّﻔﻟﺍ ﻡﺪﺨﺘﺳﺇ"
 
 
 msgctxt "Operator"
@@ -27940,6 +27964,10 @@ msgid "3D Mouse Settings"
 msgstr "ﺩﺎﻌﺑﻻ﻿ﺍ ﺔﻴﺛﻼ﻿ﺜﻟﺍ ﺓﺭﺄﻔﻟﺍ ﺕﺍﺩﺍﺪﻋﺍ"
 
 
+msgid "Auto Run Python Scripts"
+msgstr "ﻥﻮﺜﻳﺎﺒﻟﺍ ﺕﺎﺘﺒﻳﺮﻜﺳ ﺎﻴﺗﺍﺫ ﻞﻐﺷ"
+
+
 msgid "Theme Space"
 msgstr "ﻂﻤﻨﻟﺍ ءﺎﻀﻓ"
 
@@ -29286,10 +29314,6 @@ msgstr "blend. ـﻟﺍ ﻒﻠﻣ ﻆﻔﺣ ﺪﻨﻋ ﻒﻠﻤﻟﺍ ﻂﻐﺿ 
 
 msgid "Load user interface setup when loading .blend files"
 msgstr "blend. ﺕﺎﻔﻠﻣ ﻞﻴﻤﺤﺗ ﺪﻨﻋ ﻡﺪﺨﺘﺴﻤﻟﺍ ﺔﻬﺟﺍﻭ ﺕﺍﺩﺍﺪﻋﺍ ﻞﻤّﺣ"
-
-
-msgid "Auto Run Python Scripts"
-msgstr "ﻥﻮﺜﻳﺎﺒﻟﺍ ﺕﺎﺘﺒﻳﺮﻜﺳ ﺎﻴﺗﺍﺫ ﻞﻐﺷ"
 
 
 msgid "Allow any .blend file to run scripts automatically (unsafe with blend files from an untrusted source)"
@@ -31301,6 +31325,10 @@ msgid "Blender File"
 msgstr "ﺭﺪﻨﻠﺑ ﻒﻠﻣ ﺮﻬﻇﺃ"
 
 
+msgid "Sort Alphabetically"
+msgstr "ﺎﻳﺪﺠﺑﺃ ﺐﺗﺭ"
+
+
 msgid "Filter method"
 msgstr "ﺔﻴﻔﺼﺘﻟﺍ ﺔﻘﻳﺮﻃ"
 
@@ -32947,14 +32975,6 @@ msgid "Occlude objects with the environment color as they are further away"
 msgstr "ﺍﻭﺪﻌﺘﺑﺍ ﺎﻤﻠﻛ ﻂﻴﺤﻤﻟﺍ ﻥﻮﻟ ﻊﻣ ﺕﺎﻨﺋﺎﻜﻟﺍ ﺱﺎﺒﺤﻧﺍ"
 
 
-msgid "Press"
-msgstr "ﻊﻓﺪﻟﺍ"
-
-
-msgid "Release"
-msgstr "ﻕﻼ﻿ﻃﻹ﻿ﺍ"
-
-
 msgid "Operator Properties"
 msgstr "ﻞﻣﺎﻌﻟﺍ ﺹﺍﻮﺧ"
 
@@ -33278,6 +33298,11 @@ msgid "All"
 msgstr "ﻞﻜﻟﺍ"
 
 
+msgctxt "Operator"
+msgid "Report a Bug"
+msgstr "ﺄﻄﺧ ﻎﻴﻠﺒﺗ"
+
+
 msgid "Object Index"
 msgstr "ﻦﺋﺎﻜﻟﺍ ﺮﺷﺆﻣ"
 
@@ -33332,11 +33357,6 @@ msgstr ":ﺮﻳﺬﺤﺗ"
 msgctxt "Operator"
 msgid "Documentation"
 msgstr "ﻖﻴﺛﻮﺘﻟﺍ"
-
-
-msgctxt "Operator"
-msgid "Report a Bug"
-msgstr "ﺄﻄﺧ ﻎﻴﻠﺒﺗ"
 
 
 msgid "File:"
@@ -34818,6 +34838,11 @@ msgstr "ﺩﺪﻌﺘﻣ-ﻦﻳﻮﻠﺗ"
 
 
 msgctxt "Operator"
+msgid "Quick Edit"
+msgstr "ﻊﻳﺮﺳ ﻞﻳﺪﻌﺗ"
+
+
+msgctxt "Operator"
 msgid "Apply"
 msgstr "ﻖﺒﻃ"
 
@@ -34841,10 +34866,6 @@ msgstr "!ﻞﻳﺪﻌﺘﻟﺍ ﻞﻴﻌﻔﺘﻟ ﺓﺮﻛﺍﺬﻟﺍ ﻲﻓ"
 
 msgid "KeyingSet"
 msgstr "ﺢﻴﺗﺎﻔﻤﻟﺍ ﺔﻋﻮﻤﺠﻣ"
-
-
-msgid "GP_Layer"
-msgstr "ﺕﺎﻈﺣﻼ﻿ﻣ ﺔﻘﺒﻃ"
 
 
 msgid "Const"
@@ -34894,6 +34915,10 @@ msgstr "ﺢﻄﺳ"
 
 msgid "True Normal"
 msgstr "ﻲﻘﻴﻘﺣ ﻢﻇﺎﻧ"
+
+
+msgid "GP_Layer"
+msgstr "ﺕﺎﻈﺣﻼ﻿ﻣ ﺔﻘﺒﻃ"
 
 
 msgid "Slot %d"
@@ -35259,6 +35284,14 @@ msgstr "ﺎﻃﺎﺒﻨﺘﺳﺍ ﺩﺪﻣ"
 
 msgid "Reset Curve"
 msgstr "ﻰﻨﺤﻨﻤﻟﺍ ﻂﺒﺿ ﺪﻋﺃ"
+
+
+msgid "H"
+msgstr "H"
+
+
+msgid "S"
+msgstr "S"
 
 
 msgid "Zoom in"
@@ -36515,10 +36548,6 @@ msgid "Val"
 msgstr "ﺔﻤﻴﻘﻟﺍ"
 
 
-msgid "S"
-msgstr "S"
-
-
 msgid "Planar"
 msgstr "ﺢﻄﺳ"
 
@@ -36713,10 +36742,6 @@ msgstr "W3"
 
 msgid "W4"
 msgstr "W4"
-
-
-msgid "H"
-msgstr "H"
 
 
 msgid "Image too small"

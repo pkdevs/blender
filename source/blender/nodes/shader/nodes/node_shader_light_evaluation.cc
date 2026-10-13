@@ -76,8 +76,7 @@ static int node_shader_gpu_light_evaluation(GPUMaterial *mat,
   const int mode = node->custom1;
 
   if (!in[0].link) {
-    /* Error: not linked to a light accumulation zone. */
-    BLI_assert_unreachable();
+    /* Error: not linked to a light accumulation node */
     return false;
   }
 

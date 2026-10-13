@@ -1016,7 +1016,7 @@ class edit_generators:
             edits = []
 
             # Keep:
-            # - `struct Foo;` (forward declaration).
+            # - `strucrt Foo;` (forward declaration).
             # - `struct Foo {` (declaration).
             # - `struct {` (declaration).
             # In these cases removing will cause a build error (which is technically "safe")
@@ -1539,7 +1539,7 @@ class edit_generators:
         def _header_exclude(f_basename: str) -> bool:
             # This header only exists to add additional warnings, removing it doesn't impact generated output.
             # Skip this file.
-            if f_basename == "BLI_strict_flags.hh":
+            if f_basename == "BLI_strict_flags.h":
                 return True
             return False
 

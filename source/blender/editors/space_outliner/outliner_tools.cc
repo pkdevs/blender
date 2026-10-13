@@ -890,7 +890,7 @@ static ui::Block *merged_element_search_menu(bContext *C, ARegion *region, void 
                          nullptr,
                          merged_element_search_update_fn,
                          data,
-                         nullptr,
+                         false,
                          nullptr,
                          merged_element_search_exec_fn,
                          nullptr);
@@ -925,8 +925,7 @@ void merged_element_search_menu_invoke(bContext *C,
   select_data->parent_element = parent_te;
   select_data->select_element = activate_te;
 
-  popup_block_invoke(
-      C, merged_element_search_menu, select_data, ui::but_func_argN_free<MergedSearchData>);
+  popup_block_invoke(C, merged_element_search_menu, select_data, MEM_delete_void);
 }
 
 static void object_select_fn(bContext *C,

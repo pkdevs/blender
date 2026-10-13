@@ -3,11 +3,6 @@
 # SPDX-License-Identifier: GPL-2.0-or-later
 
 set(INC
-  ../blender/compositor
-  ../blender/compositor/algorithms
-  ../blender/compositor/cached_resources
-  ../blender/compositor/derived_resources
-  ../blender/compositor/utilities
   ../blender/editors/include
   ../blender/io/usd
   ../blender/makesrna
@@ -17,7 +12,6 @@ set(LIB
   PRIVATE bf::blenkernel
   PRIVATE bf::blenlib
   PRIVATE bf::bmesh
-  bf_compositor
   PRIVATE bf::depsgraph
   PRIVATE bf::dna
   PRIVATE bf::functions

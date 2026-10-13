@@ -1209,7 +1209,7 @@ enum ePaintCanvasSource : char {
 struct MeshAutomaskingSettings {
   DNA_DEFINE_CXX_METHODS(MeshAutomaskingSettings)
 
-  eAutomasking_flag flags = eAutomasking_flag(0);
+  int flags = 0;
 
   int boundary_edges_propagation_steps = 1;
   int cavity_blur_steps = 2;
@@ -1810,19 +1810,10 @@ struct MeshStatVis {
 
 /** #SequencerToolSettings::overlap_mode */
 enum eSeqOverlapMode : int {
-  SEQ_OVERLAP_RIPPLE,
+  SEQ_OVERLAP_EXPAND,
   SEQ_OVERLAP_OVERWRITE,
   SEQ_OVERLAP_SHUFFLE,
 };
-
-/** #SequencerToolSettings::ripple_flag */
-enum eSeqRippleFlag : int {
-  SEQ_RIPPLE_ALL_CHANNELS = 1 << 0,
-  SEQ_RIPPLE_MARKERS = 1 << 1,
-  SEQ_RIPPLE_INSERT = 1 << 2,
-  SEQ_RIPPLE_CLEAR_RANGES = 1 << 3,
-};
-ENUM_OPERATORS(eSeqRippleFlag)
 
 /** #SequencerToolSettings::snap_mode */
 enum eSequencerSnapMode : short {
@@ -1855,9 +1846,7 @@ struct SequencerToolSettings {
   eSeqImageFitMethod fit_method = SEQ_SCALE_TO_FIT;
   eSequencerSnapMode snap_mode = {};
   eSequencerSnapFlag snap_flag = {};
-  eSeqOverlapMode overlap_mode = SEQ_OVERLAP_RIPPLE;
-  eSeqRippleFlag ripple_flag = SEQ_RIPPLE_ALL_CHANNELS | SEQ_RIPPLE_MARKERS |
-                               SEQ_RIPPLE_CLEAR_RANGES;
+  eSeqOverlapMode overlap_mode = SEQ_OVERLAP_EXPAND;
   /**
    * When there are many snap points,
    * 0-1 range corresponds to resolution from bound-box to all possible snap points.
@@ -1969,9 +1958,7 @@ enum eSnapMode : short {
   SCE_SNAP_INDIVIDUAL_NEAREST = (1 << 9),
   SCE_SNAP_INDIVIDUAL_PROJECT = (1 << 10),
 
-  SCE_SNAP_TO_FACE_MIDPOINT = (1 << 11),
-
-  SCE_SNAP_TO_ORIGIN = (1 << 12)
+  SCE_SNAP_TO_FACE_MIDPOINT = (1 << 11)
 };
 ENUM_OPERATORS(eSnapMode)
 

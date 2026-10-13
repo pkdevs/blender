@@ -629,15 +629,13 @@ static void correctivesmooth_modifier_do(ModifierData *md,
       goto error;
     }
     else {
-      const Mesh *orig_mesh = id_cast<const Mesh *>(ob->data);
-      const BMesh *orig_bm = BKE_editmesh_bmesh_get(orig_mesh);
-      const int orig_verts_num = orig_bm ? orig_bm->totvert : orig_mesh->verts_num;
+      const int me_numVerts = BKE_mesh_wrapper_vert_len(mesh);
 
-      if (orig_verts_num != vertexCos.size()) {
+      if (me_numVerts != vertexCos.size()) {
         BKE_modifier_set_error(ob,
                                md,
                                "Original vertex count mismatch: %u to %u",
-                               uint(orig_verts_num),
+                               uint(me_numVerts),
                                uint(vertexCos.size()));
         goto error;
       }

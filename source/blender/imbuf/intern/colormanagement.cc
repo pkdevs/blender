@@ -707,13 +707,6 @@ static bool colormanage_use_look(const char *look_name, const char *view_name)
   return (look && look->is_noop == false && colormanage_compatible_look(look, view_name));
 }
 
-static float colormanage_exponent(float gamma)
-{
-  const float exponent = 1.0f / std::max(FLT_EPSILON, gamma);
-  /* OpenColorIO reports an error for exponents bigger than this. */
-  return std::min(exponent, 100.0f);
-}
-
 void IMB_colormanagement_display_settings_from_ctx(
     const bContext *C,
     ColorManagedViewSettings **r_view_settings,
@@ -763,7 +756,7 @@ static std::shared_ptr<const ocio::CPUProcessor> get_display_buffer_processor(
   display_parameters.display = display_settings.display_device;
   display_parameters.look = colormanage_use_look(look, view_transform) ? look : "";
   display_parameters.scale = (exposure == 0.0f) ? 1.0f : powf(2.0f, exposure);
-  display_parameters.exponent = colormanage_exponent(gamma);
+  display_parameters.exponent = (gamma == 1.0f) ? 1.0f : 1.0f / max_ff(FLT_EPSILON, gamma);
   display_parameters.temperature = temperature;
   display_parameters.tint = tint;
   display_parameters.use_white_balance = use_white_balance;
@@ -884,8 +877,7 @@ void colormanage_imbuf_make_linear(ImBuf *ibuf,
 
 static bool colormanage_check_display_settings(ColorManagedDisplaySettings *display_settings,
                                                const char *what,
-                                               const ocio::Display *default_display,
-                                               const CLG_Level log_level)
+                                               const ocio::Display *default_display)
 {
   StringRefNull display_name = display_settings->display_device;
 
@@ -913,12 +905,11 @@ static bool colormanage_check_display_settings(ColorManagedDisplaySettings *disp
 
   /* Don't warn when only one display is available (e.g. fallback config). */
   if (g_config()->get_num_displays() > 1) {
-    CLOG_AT_LEVEL(&LOG,
-                  log_level,
-                  "Display \"%s\" used by %s not found, setting to \"%s\".",
-                  display_settings->display_device,
-                  what,
-                  new_display_name.c_str());
+    CLOG_WARN(&LOG,
+              "Display \"%s\" used by %s not found, setting to \"%s\".",
+              display_settings->display_device,
+              what,
+              new_display_name.c_str());
   }
   STRNCPY_UTF8(display_settings->display_device, new_display_name.c_str());
   return false;
@@ -964,8 +955,7 @@ static StringRefNull colormanage_find_matching_view_name(const ocio::Display *di
 
 static bool colormanage_check_view_settings(ColorManagedDisplaySettings *display_settings,
                                             ColorManagedViewSettings *view_settings,
-                                            const char *what,
-                                            const CLG_Level log_level)
+                                            const char *what)
 {
   const ocio::Display *display = g_config()->get_display_by_name(display_settings->display_device);
   if (!display) {
@@ -990,12 +980,11 @@ static bool colormanage_check_view_settings(ColorManagedDisplaySettings *display
       if (!new_view_name.is_empty()) {
         /* Don't warn when only one view is available (e.g. fallback config). */
         if (display->get_num_views() > 1) {
-          CLOG_AT_LEVEL(&LOG,
-                        log_level,
-                        "%s view \"%s\" not found, setting to \"%s\".",
-                        what,
-                        view_settings->view_transform,
-                        new_view_name.c_str());
+          CLOG_WARN(&LOG,
+                    "%s view \"%s\" not found, setting to \"%s\".",
+                    what,
+                    view_settings->view_transform,
+                    new_view_name.c_str());
         }
         STRNCPY_UTF8(view_settings->view_transform, new_view_name.c_str());
         ok = false;
@@ -1011,12 +1000,11 @@ static bool colormanage_check_view_settings(ColorManagedDisplaySettings *display
     if (look == nullptr) {
       /* Don't warn when only one look is available (e.g. fallback config). */
       if (g_config()->get_num_looks() > 1) {
-        CLOG_AT_LEVEL(&LOG,
-                      log_level,
-                      "%s look \"%s\" not found, setting default \"%s\".",
-                      what,
-                      view_settings->look,
-                      default_look_name);
+        CLOG_WARN(&LOG,
+                  "%s look \"%s\" not found, setting default \"%s\".",
+                  what,
+                  view_settings->look,
+                  default_look_name);
       }
       STRNCPY_UTF8(view_settings->look, default_look_name);
       ok = false;
@@ -1055,10 +1043,7 @@ static void colormanage_name_to_interop_id(const char *name, char *interop_id)
   BLI_strncpy(interop_id, is_primary ? colorspace->interop_id().c_str() : "", MAX_COLORSPACE_NAME);
 }
 
-static bool colormanage_check_colorspace_name(char *name,
-                                              char *interop_id,
-                                              const char *what,
-                                              const CLG_Level log_level)
+static bool colormanage_check_colorspace_name(char *name, char *interop_id, const char *what)
 {
   if (name[0] == '\0') {
     return true;
@@ -1077,8 +1062,7 @@ static bool colormanage_check_colorspace_name(char *name,
   }
 
   if (!colorspace) {
-    CLOG_AT_LEVEL(
-        &LOG, log_level, "%s colorspace \"%s\" not found, will use default instead.", what, name);
+    CLOG_WARN(&LOG, "%s colorspace \"%s\" not found, will use default instead.", what, name);
     name[0] = '\0';
     interop_id[0] = '\0';
     return false;
@@ -1101,10 +1085,9 @@ static bool colormanage_check_colorspace_name(char *name,
 }
 
 static bool colormanage_check_colorspace_settings(ColorManagedColorspaceSettings *settings,
-                                                  const char *what,
-                                                  const CLG_Level log_level)
+                                                  const char *what)
 {
-  return colormanage_check_colorspace_name(settings->name, settings->interop_id, what, log_level);
+  return colormanage_check_colorspace_name(settings->name, settings->interop_id, what);
 }
 
 ColorManagedConfig &IMB_colormanagement_get_config()
@@ -1123,37 +1106,27 @@ void IMB_colormanagement_check_file_config(Main *bmain)
   /* Check display, view and colorspace names in datablocks. */
   bool is_missing_opencolorio_config = false;
 
-  /* New files are quietly changed to use the active config, automatic
-   * switching to different display/view/colorspace names is expected. */
-  const bool is_new_file = bmain->filepath[0] == '\0';
-  const CLG_Level log_level = is_new_file ? CLG_LEVEL_DEBUG : CLG_LEVEL_WARN;
-
   /* Check scenes. */
   for (Scene &scene : bmain->scenes) {
     ColorManagedColorspaceSettings *sequencer_colorspace_settings;
     bool ok = true;
 
     /* check scene color management settings */
-    ok &= colormanage_check_display_settings(
-        &scene.display_settings, "scene", default_display, log_level);
-    ok &= colormanage_check_view_settings(
-        &scene.display_settings, &scene.view_settings, "scene", log_level);
+    ok &= colormanage_check_display_settings(&scene.display_settings, "scene", default_display);
+    ok &= colormanage_check_view_settings(&scene.display_settings, &scene.view_settings, "scene");
 
     ok &= colormanage_check_display_settings(
-        &scene.r.im_format.display_settings, "scene output", default_display, log_level);
-    ok &= colormanage_check_view_settings(&scene.r.im_format.display_settings,
-                                          &scene.r.im_format.view_settings,
-                                          "scene output",
-                                          log_level);
-    ok &= colormanage_check_colorspace_settings(
-        &scene.r.im_format.linear_colorspace_settings, "scene output", log_level);
-    ok &= colormanage_check_colorspace_settings(
-        &scene.r.bake.im_format.linear_colorspace_settings, "bake output", log_level);
+        &scene.r.im_format.display_settings, "scene output", default_display);
+    ok &= colormanage_check_view_settings(
+        &scene.r.im_format.display_settings, &scene.r.im_format.view_settings, "scene output");
+    ok &= colormanage_check_colorspace_settings(&scene.r.im_format.linear_colorspace_settings,
+                                                "scene output");
+    ok &= colormanage_check_colorspace_settings(&scene.r.bake.im_format.linear_colorspace_settings,
+                                                "bake output");
 
     sequencer_colorspace_settings = &scene.sequencer_colorspace_settings;
 
-    ok &= colormanage_check_colorspace_settings(
-        sequencer_colorspace_settings, "sequencer", log_level);
+    ok &= colormanage_check_colorspace_settings(sequencer_colorspace_settings, "sequencer");
 
     if (sequencer_colorspace_settings->name[0] == '\0') {
       IMB_colormanagement_colorspace_settings_set(sequencer_colorspace_settings,
@@ -1164,8 +1137,8 @@ void IMB_colormanagement_check_file_config(Main *bmain)
     if (scene.ed != nullptr) {
       seq::foreach_strip(&scene.ed->seqbase, [&](Strip *strip) {
         if (strip->data) {
-          ok &= colormanage_check_colorspace_settings(
-              &strip->data->colorspace_settings, "sequencer strip", log_level);
+          ok &= colormanage_check_colorspace_settings(&strip->data->colorspace_settings,
+                                                      "sequencer strip");
         }
         return true;
       });
@@ -1176,14 +1149,12 @@ void IMB_colormanagement_check_file_config(Main *bmain)
 
   /* Check image and movie input colorspace. */
   for (Image &image : bmain->images) {
-    const bool ok = colormanage_check_colorspace_settings(
-        &image.colorspace_settings, "image", log_level);
+    const bool ok = colormanage_check_colorspace_settings(&image.colorspace_settings, "image");
     is_missing_opencolorio_config |= (!ok && !ID_IS_LINKED(&image.id));
   }
 
   for (MovieClip &clip : bmain->movieclips) {
-    const bool ok = colormanage_check_colorspace_settings(
-        &clip.colorspace_settings, "clip", log_level);
+    const bool ok = colormanage_check_colorspace_settings(&clip.colorspace_settings, "clip");
     is_missing_opencolorio_config |= (!ok && !ID_IS_LINKED(&clip.id));
   }
 
@@ -1195,24 +1166,23 @@ void IMB_colormanagement_check_file_config(Main *bmain)
         if (node.type_legacy == CMP_NODE_CONVERT_TO_DISPLAY) {
           NodeConvertToDisplay *nctd = static_cast<NodeConvertToDisplay *>(node.storage);
           ok &= colormanage_check_display_settings(
-              &nctd->display_settings, "node", default_display, log_level);
+              &nctd->display_settings, "node", default_display);
           ok &= colormanage_check_view_settings(
-              &nctd->display_settings, &nctd->view_settings, "node", log_level);
+              &nctd->display_settings, &nctd->view_settings, "node");
         }
         else if (node.type_legacy == CMP_NODE_CONVERT_COLOR_SPACE) {
           NodeConvertColorSpace *ncs = static_cast<NodeConvertColorSpace *>(node.storage);
           ok &= colormanage_check_colorspace_name(
-              ncs->from_color_space, ncs->from_interop_id, "node", log_level);
-          ok &= colormanage_check_colorspace_name(
-              ncs->to_color_space, ncs->to_interop_id, "node", log_level);
+              ncs->from_color_space, ncs->from_interop_id, "node");
+          ok &= colormanage_check_colorspace_name(ncs->to_color_space, ncs->to_interop_id, "node");
         }
         else if (node.type_legacy == CMP_NODE_OUTPUT_FILE) {
           NodeCompositorFileOutput *nfo = static_cast<NodeCompositorFileOutput *>(node.storage);
-          ok &= colormanage_check_colorspace_settings(
-              &nfo->format.linear_colorspace_settings, "node", log_level);
+          ok &= colormanage_check_colorspace_settings(&nfo->format.linear_colorspace_settings,
+                                                      "node");
           for (NodeCompositorFileOutputItem &item : MutableSpan(nfo->items, nfo->items_count)) {
-            ok &= colormanage_check_colorspace_settings(
-                &item.format.linear_colorspace_settings, "node", log_level);
+            ok &= colormanage_check_colorspace_settings(&item.format.linear_colorspace_settings,
+                                                        "node");
           }
         }
       }
@@ -1223,7 +1193,7 @@ void IMB_colormanagement_check_file_config(Main *bmain)
   /* Inform users about mismatch, but not for new files. Linked datablocks are also ignored,
    * as we are not overwriting them on blend file save which is the main purpose of this
    * warning. */
-  if (!is_new_file && is_missing_opencolorio_config) {
+  if (bmain->filepath[0] != '\0' && is_missing_opencolorio_config) {
     bmain->colorspace.is_missing_opencolorio_config = true;
   }
 }
@@ -3691,17 +3661,6 @@ void IMB_colormanagement_file_read_post(Main *bmain,
   }
 }
 
-void IMB_colormanagement_file_save_post(Main *bmain)
-{
-  /* Keep project config failure, unless the file was saved into another project. */
-  if (colormanage_config_candidates_get(bmain) != g_config_requested()) {
-    bmain->colorspace.is_failed_opencolorio_config = false;
-  }
-
-  /* Missing color spaces in the file are resolved by saving. */
-  bmain->colorspace.is_missing_opencolorio_config = bmain->colorspace.is_failed_opencolorio_config;
-}
-
 void IMB_colormanagement_undo_read_post(Main *bmain, const MainColorspace &old_colorspace)
 {
   /* Preserve config warnings. */
@@ -4252,7 +4211,7 @@ bool IMB_colormanagement_setup_glsl_draw_from_space(
   display_parameters.look = (use_look) ? applied_view_settings->look : "";
   display_parameters.curve_mapping = applied_curve_mapping;
   display_parameters.scale = (exposure == 0.0f) ? 1.0f : powf(2.0f, exposure);
-  display_parameters.exponent = colormanage_exponent(gamma);
+  display_parameters.exponent = (gamma == 1.0f) ? 1.0f : 1.0f / max_ff(FLT_EPSILON, gamma);
   display_parameters.dither = dither;
   display_parameters.temperature = applied_view_settings->temperature;
   display_parameters.tint = applied_view_settings->tint;

@@ -11,6 +11,7 @@
 #include <optional>
 #include <string>
 
+#include "BLI_compute_context.hh"
 #include "BLI_map.hh"
 #include "BLI_mutex.hh"
 #include "BLI_set.hh"
@@ -36,8 +37,6 @@ struct SceneCompositorEffect;
 struct DepsNodeHandle;
 struct bNodeTree;
 struct PointerRNA;
-
-class ComputeContext;
 
 namespace bke {
 class bNodeTreeZone;
@@ -213,22 +212,18 @@ void add_depsgraph_relations(Scene &scene,
 /* Get the compute context of the zone that the given node lies inside given the compute context of
  * the owner tree or zone. If the node does not lie inside a zone, the given compute context is
  * simply returned. The compute context is assumed to be that of a viewer node, so compute contexts
- * will be constructed using inspection index for repeat zone for instance. If the node lies inside
- * a context that does not support viewers, like closures, nullptr is returned. */
-const ComputeContext *get_zone_viewer_compute_context(
+ * will be constructed using inspection index for repeat zone for instance. */
+const ComputeContext &get_zone_viewer_compute_context(
     const bNode &node,
     const bke::bNodeTreeZone *zone,
     const ComputeContext &compute_context,
     bke::ComputeContextCache &compute_context_cache);
 
-/* Computes the compute context of the active viewer node. If no active viewer node exists, a
- * nullptr is returned. */
-const ComputeContext *compute_viewer_compute_context(
-    const Scene &scene, bke::ComputeContextCache &compute_context_cache);
-const ComputeContext *compute_viewer_compute_context(
-    const Scene &scene,
-    const bNodeTree &root_node_group,
-    bke::ComputeContextCache &compute_context_cache);
+/* Computes the hash of the compute context of the active viewer node. If no active viewer node
+ * exists, a nullopt is returned. */
+std::optional<ComputeContextHash> compute_viewer_compute_context_hash(const Scene &scene);
+std::optional<ComputeContextHash> compute_viewer_compute_context_hash(
+    const Scene &scene, const bNodeTree &root_node_group);
 
 }  // namespace bke::compositor
 }  // namespace blender

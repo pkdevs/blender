@@ -47,8 +47,6 @@ struct SymbolVariable : Symbol {
   ast::Expr reference_value = {};
   /* Valid if the variable has runtime array capacity. */
   ast::Expr capacity_value = {};
-  /* Condition set when declaring a resource using the condition attribute. */
-  ast::Expr condition = {};
 
   /* Value if constexpr. */
   ConstexprValue value = ConstexprError(0);

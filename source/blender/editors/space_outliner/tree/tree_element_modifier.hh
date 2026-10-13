@@ -18,6 +18,12 @@ struct GpencilModifierData;
 struct ModifierData;
 struct Object;
 
+struct ModifierDataStoreElem {
+  ModifierData *md;
+
+  ModifierDataStoreElem(ModifierData *md_) : md(md_) {}
+};
+
 namespace ed::outliner {
 
 class TreeElementModifierBase final : public AbstractTreeElement {
@@ -42,17 +48,17 @@ class TreeElementModifierBase final : public AbstractTreeElement {
 class TreeElementModifier final : public AbstractTreeElement {
   /* Not needed right now, avoid unused member variable warning. */
   Object &object_;
-  ModifierData &modifier_;
+  ModifierDataStoreElem &md_;
 
  public:
   static constexpr eTreeStoreElemType element_type = TSE_MODIFIER;
 
-  TreeElementModifier(TreeElement &legacy_te, Object &object, ModifierData &modifier);
+  TreeElementModifier(TreeElement &legacy_te, Object &object, ModifierDataStoreElem &md);
   void expand(SpaceOutliner & /*soops*/) const override;
 
   /** The ID identifying this element in the tree-store, see #AbstractTreeDisplay::add_element().
    */
-  static ID *owner_id(Object &object, ModifierData &modifier);
+  static ID *owner_id(Object &object, ModifierDataStoreElem &md);
 
   std::optional<BIFIconID> get_icon() const override;
 

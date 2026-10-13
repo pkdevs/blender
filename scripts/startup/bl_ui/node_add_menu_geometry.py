@@ -59,8 +59,6 @@ class NODE_MT_gn_curve_base(node_add_menu.NodeMenu):
         self.draw_menu(layout, path="Curve/Operations")
         self.draw_menu(layout, path="Curve/Primitives")
         self.draw_menu(layout, path="Curve/Topology")
-        layout.separator()
-        self.node_operator(layout, "GeometryNodeConstructCurves")
 
         self.draw_assets_for_catalog(layout, self.bl_label)
 
@@ -79,7 +77,6 @@ class NODE_MT_gn_curve_read_base(node_add_menu.NodeMenu):
         self.node_operator(layout, "GeometryNodeCurveHandleTypeSelection")
         self.node_operator(layout, "GeometryNodeNURBSOrder")
         self.node_operator(layout, "GeometryNodeNURBSWeight")
-        layout.separator()
         self.node_operator(layout, "GeometryNodeInputSplineCyclic")
         self.node_operator(layout, "GeometryNodeSplineLength")
         self.node_operator(layout, "GeometryNodeSplineParameter")
@@ -150,9 +147,9 @@ class NODE_MT_gn_curve_primitives_base(node_add_menu.NodeMenu):
         self.node_operator(layout, "GeometryNodeCurvePrimitiveBezierSegment")
         self.node_operator(layout, "GeometryNodeCurvePrimitiveCircle")
         self.node_operator(layout, "GeometryNodeCurvePrimitiveLine")
+        self.node_operator(layout, "GeometryNodeCurveSpiral")
         self.node_operator(layout, "GeometryNodeCurveQuadraticBezier")
         self.node_operator(layout, "GeometryNodeCurvePrimitiveQuadrilateral")
-        self.node_operator(layout, "GeometryNodeCurveSpiral")
         self.node_operator(layout, "GeometryNodeCurveStar")
 
         self.draw_assets_for_catalog(layout, self.menu_path)
@@ -448,9 +445,9 @@ class NODE_MT_gn_instance_base(node_add_menu.NodeMenu):
         layout.separator()
         self.node_operator(layout, "GeometryNodeInputInstanceBounds")
         self.node_operator(layout, "GeometryNodeInputInstanceReference")
+        self.node_operator(layout, "GeometryNodeInstanceTransform")
         self.node_operator(layout, "GeometryNodeInputInstanceRotation")
         self.node_operator(layout, "GeometryNodeInputInstanceScale")
-        self.node_operator(layout, "GeometryNodeInstanceTransform")
 
         self.draw_assets_for_catalog(layout, self.bl_label)
 
@@ -809,12 +806,12 @@ class NODE_MT_gn_utilities_rotation_base(node_add_menu.NodeMenu):
         ops = props.settings.add()
         ops.name = "data_type"
         ops.value = "'ROTATION'"
-        self.node_operator(layout, "FunctionNodeQuaternionToRotation")
         self.node_operator(layout, "FunctionNodeRotateRotation")
         self.node_operator(layout, "FunctionNodeRotateVector")
         self.node_operator(layout, "FunctionNodeRotationToAxisAngle")
         self.node_operator(layout, "FunctionNodeRotationToEuler")
         self.node_operator(layout, "FunctionNodeRotationToQuaternion")
+        self.node_operator(layout, "FunctionNodeQuaternionToRotation")
 
         self.draw_assets_for_catalog(layout, self.menu_path)
 
@@ -900,17 +897,17 @@ class NODE_MT_gn_utilities_math_base(node_add_menu.NodeMenu):
             context, layout, "FunctionNodeBitMath", "operation", search_weight=-1.0,
         )
         self.node_operator_with_searchable_enum(context, layout, "FunctionNodeBooleanMath", "operation")
-        self.node_operator(layout, "ShaderNodeClamp")
-        self.node_operator(layout, "FunctionNodeCompare")
-        self.node_operator(layout, "ShaderNodeFloatCurve")
-        self.node_operator(layout, "FunctionNodeFloatToInt")
-        self.node_operator(layout, "FunctionNodeHashValue")
         self.node_operator_with_searchable_enum(
             context,
             layout,
             "FunctionNodeIntegerMath",
             "operation",
             defaults_callback=node_add_menu.set_int_math_node_default_props)
+        self.node_operator(layout, "ShaderNodeClamp")
+        self.node_operator(layout, "FunctionNodeCompare")
+        self.node_operator(layout, "ShaderNodeFloatCurve")
+        self.node_operator(layout, "FunctionNodeFloatToInt")
+        self.node_operator(layout, "FunctionNodeHashValue")
         self.node_operator(layout, "ShaderNodeMapRange")
         self.node_operator_with_searchable_enum(
             context,
@@ -991,7 +988,6 @@ class NODE_MT_gn_volume_read_base(node_add_menu.NodeMenu):
     def draw(self, context):
         del context
         layout = self.layout
-        self.node_operator(layout, "GeometryNodeGetGridNames")
         self.node_operator(layout, "GeometryNodeGetNamedGrid")
         self.node_operator(layout, "GeometryNodeGridInfo")
         self.node_operator(layout, "GeometryNodeInputVoxelIndex")
@@ -1051,14 +1047,14 @@ class NODE_MT_gn_volume_operations_base(node_add_menu.NodeMenu):
         self.node_operator(layout, "GeometryNodeSDFGridMedian")
         self.node_operator(layout, "GeometryNodeSDFGridOffset")
         layout.separator()
+        self.node_operator(layout, "GeometryNodeFieldToGrid")
         self.node_operator(layout, "GeometryNodeGridClip")
         self.node_operator(layout, "GeometryNodeGridDeactivateVoxels")
-        self.node_operator(layout, "GeometryNodeFieldToGrid")
         self.node_operator(layout, "GeometryNodeGridDilateAndErode")
         self.node_operator(layout, "GeometryNodeGridMean")
         self.node_operator(layout, "GeometryNodeGridMedian")
-        self.node_operator(layout, "GeometryNodeGridTopologyBoolean")
         self.node_operator(layout, "GeometryNodeGridPrune")
+        self.node_operator(layout, "GeometryNodeGridTopologyBoolean")
         self.node_operator(layout, "GeometryNodeGridVoxelize")
 
         self.draw_assets_for_catalog(layout, self.menu_path)

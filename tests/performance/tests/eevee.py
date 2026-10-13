@@ -148,11 +148,8 @@ else:
 
         def supported_device_types(self):
             return [
-                "METAL", "METAL-RT", "VULKAN", "OPENGL",
+                "METAL", "VULKAN", "OPENGL",
             ]
-
-        def remove_redundant_device_types(self, devices):
-            return self.remove_redundant_hwrt_device_types(devices)
 
         def use_background(self):
             return False
