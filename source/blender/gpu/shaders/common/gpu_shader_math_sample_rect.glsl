@@ -18,10 +18,10 @@ float2 fast_hypot(const float2x2 &jacobian)
 {
   const float4 aj = abs(float4(jacobian[0], jacobian[1]));
   const float a = aj[0];
-  const float b = aj[2];
-  const float c = aj[1];
+  const float b = aj[1];
+  const float c = aj[2];
   const float d = aj[3];
-  return float2(a < b ? b + 0.375f * a : a + 0.375f * b, c < d ? d + 0.375f * c : c + 0.375f * d);
+  return float2(a < c ? c + 0.375f * a : a + 0.375f * c, b < d ? d + 0.375f * b : b + 0.375f * d);
 }
 
 /* Sample orthogonal rectangle of size wh centered on uv.

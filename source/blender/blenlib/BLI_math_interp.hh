@@ -86,10 +86,10 @@ enum class Sampler { Box, Bspline };
 BLI_INLINE float2 fast_hypot(const float2x2 &jacobian)
 {
   const float a = fabsf(jacobian[0][0]);
-  const float b = fabsf(jacobian[1][0]);
-  const float c = fabsf(jacobian[0][1]);
+  const float b = fabsf(jacobian[0][1]);
+  const float c = fabsf(jacobian[1][0]);
   const float d = fabsf(jacobian[1][1]);
-  return float2(a < b ? b + 0.375f * a : a + 0.375f * b, c < d ? d + 0.375f * c : c + 0.375f * d);
+  return float2(a < c ? c + 0.375f * a : a + 0.375f * c, b < d ? d + 0.375f * b : b + 0.375f * d);
 }
 
 /* -------------------------------------------------------------------- */
